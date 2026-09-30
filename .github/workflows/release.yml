@@ -47,7 +47,7 @@ jobs:
       - run: npm ci
       # Signing: set TAURI_SIGNING_PRIVATE_KEY (updater), APPLE_* (notarisation) and a
       # Windows code-signing certificate as repository secrets to produce signed installers.
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
