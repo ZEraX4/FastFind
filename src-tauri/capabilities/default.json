@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Least privilege: the UI may call FastFind commands, listen to events and show the folder picker, and the frameless window may move, minimise, maximise and close itself. Opening files happens only through the backend (which checks the index), so no opener permission is granted to the web view.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "dialog:allow-open",
+    "dialog:allow-message"
+  ]
+}

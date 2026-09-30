@@ -1,0 +1,31 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: FastFind version
+      placeholder: "1.0.0"
+    validations: { required: true }
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt
+      description: From the data folder's `logs/` (Settings → Diagnostics → Open log folder). Logs contain file paths but never document text.
+      render: text
+  - type: markdown
+    attributes:
+      value: If a specific file fails to index, attach a sample with the same problem, never a private document. Security issues go through SECURITY.md instead.

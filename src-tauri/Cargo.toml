@@ -1,0 +1,29 @@
+[package]
+name = "fastfind"
+description = "FastFind — fast local full-text file search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+default-run = "fastfind"
+
+[[bin]]
+name = "fastfind"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+fastfind-core = { path = "../crates/fastfind-core" }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+
+[features]
+# Enables `tauri dev` custom protocol handling in release builds.
+custom-protocol = ["tauri/custom-protocol"]

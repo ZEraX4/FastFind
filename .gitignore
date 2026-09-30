@@ -1,0 +1,25 @@
+# Build output
+/target/
+/ui/dist/
+/dist-installers/
+node_modules/
+
+# Tauri-generated schemas (recreated on every build)
+/src-tauri/gen/
+
+# PDFium binaries are downloaded by scripts/fetch-pdfium.{sh,ps1}, not committed
+/src-tauri/pdfium/*
+!/src-tauri/pdfium/README.md
+
+# Benchmark output and generated corpora
+/test-data/
+bench*.json
+
+# Local tooling and editors
+/.claude/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+*.log

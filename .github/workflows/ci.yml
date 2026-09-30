@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Linux system libraries (WebKitGTK for Tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev patchelf tesseract-ocr tesseract-ocr-eng
+      - name: Tesseract for OCR tests (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract
+      - name: Fetch PDFium (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh scripts/fetch-pdfium.ps1
+      - name: Fetch PDFium (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: scripts/fetch-pdfium.sh
+      - run: npm ci
+      - name: UI type check and tests
+        run: |
+          npx tsc --noEmit -p ui
+          npm test
+      - name: Build UI
+        run: npx vite build
+      - name: Rust tests (engine, parsers, integration, fixtures, PDF)
+        run: cargo test --workspace --locked
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  bench-smoke:
+    name: Benchmark smoke test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/fetch-pdfium.sh
+      - run: cargo build --release -p fastfind-cli
+      - name: 20k-file benchmark
+        env:
+          FASTFIND_PDFIUM_DIR: ${{ github.workspace }}/src-tauri/pdfium
+        run: |
+          ./target/release/fastfind-cli gen-data /tmp/corpus --files 20000 --profile mixed
+          ./target/release/fastfind-cli benchmark /tmp/corpus --iterations 10 --json bench.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark
+          path: bench.json

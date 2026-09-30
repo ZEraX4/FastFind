@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/fastfind-core", "crates/fastfind-cli", "src-tauri"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+authors = ["FastFind contributors"]
+rust-version = "1.85"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = "symbols"
+panic = "unwind"   # parsers are isolated with catch_unwind; do not abort on a malformed file
+
+[profile.dev.package."*"]
+opt-level = 2      # keep dependency code (tantivy, pdf, zip) fast in dev builds
