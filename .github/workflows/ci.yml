@@ -65,7 +65,7 @@ jobs:
         run: |
           ./target/release/fastfind-cli gen-data /tmp/corpus --files 20000 --profile mixed
           ./target/release/fastfind-cli benchmark /tmp/corpus --iterations 10 --json bench.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: benchmark
           path: bench.json
