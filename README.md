@@ -4,6 +4,10 @@ Fast, local full-text search for your files. FastFind indexes the text inside do
 spreadsheets, presentations, e-books, web pages and source code, then answers queries in
 milliseconds. It runs entirely on your computer: no cloud, no telemetry.
 
+<p align="center">
+ <img width="1603" height="1027" alt="image" src="https://github.com/user-attachments/assets/692810db-1637-4612-8d4c-5db526afc97d" />
+</p>
+
 * **Formats:** TXT, Markdown, CSV/TSV, logs, 150+ source/config types, HTML, XML, JSON, RTF,
   **DOC, DOCX, XLS, XLSX, PPT, PPTX**, ODT/ODS/ODP, EPUB and **PDF** (via PDFium). Scanned PDFs
   are detected and can be OCR'd with a local Tesseract.
