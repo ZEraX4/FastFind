@@ -315,3 +315,29 @@ fn corrupted_index_is_rebuilt_on_start() {
     assert_eq!(search(&e, "albatross"), ["deck.pptx"], "rebuilt automatically");
     assert!(fx.data.join("quarantine").read_dir().unwrap().count() >= 1, "damaged index kept for diagnosis");
 }
+
+/// Folder filters given through another name for an indexed folder (symlink, Windows junction,
+/// 8.3 short name, macOS /var → /private/var) still match, because roots are stored resolved.
+#[test]
+fn folder_filter_resolves_links_to_indexed_folders() {
+    let fx = fixture();
+    let alias = fx._tmp.path().join("alias");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&fx.root, &alias).unwrap();
+    #[cfg(windows)]
+    {
+        // A junction needs no special privileges, unlike a symlink.
+        let ok = std::process::Command::new("cmd").args(["/C", "mklink", "/J"]).arg(&alias).arg(&fx.root).output().unwrap().status.success();
+        assert!(ok, "mklink /J failed");
+    }
+    let e = open(&fx.data, false);
+    e.add_root(fx.root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(120)));
+
+    let via_alias = alias.join("reports").to_string_lossy().into_owned();
+    let mut req = SearchRequest::new("review OR albatross OR customer");
+    req.filters = SearchFilters { dirs: vec![via_alias.clone()], ..Default::default() };
+    assert_eq!(search_req(&e, req), ["deck.pptx", "quarterly.docx"]);
+    assert_eq!(search(&e, &format!("albatross in:\"{via_alias}\"")), ["deck.pptx"]);
+    e.shutdown();
+}

@@ -19,7 +19,7 @@ use crate::config::SearchSettings;
 use crate::error::{Error, Result};
 use crate::index::Fields;
 use crate::model::SearchFilters;
-use crate::util::filter_form;
+use crate::util::{filter_form, resolve_dir};
 
 /// Minimum characters before a word is also matched as a prefix (shorter prefixes would expand
 /// to huge numbers of terms).
@@ -284,7 +284,7 @@ fn term_q_raw(field: Field, v: &str) -> Q {
 }
 
 fn dir_query(f: &Fields, dir: &str) -> Result<Q> {
-    let mut d = filter_form(dir.trim());
+    let mut d = filter_form(&resolve_dir(dir.trim()));
     if d.is_empty() {
         return Ok(Box::new(AllQuery));
     }

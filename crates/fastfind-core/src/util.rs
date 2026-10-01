@@ -2,7 +2,7 @@
 
 use std::fs::File;
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -48,6 +48,33 @@ pub fn system_time_ns(t: SystemTime) -> i64 {
 /// original `PathBuf` is still used for all I/O.
 pub fn path_str(p: &Path) -> String {
     p.to_string_lossy().into_owned()
+}
+
+/// `\\?\C:\x` → `C:\x` (canonicalize on Windows returns verbatim paths).
+pub fn simplify_path(p: PathBuf) -> PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        if rest.len() >= 2 && rest.as_bytes()[1] == b':' {
+            return PathBuf::from(rest);
+        }
+        if let Some(unc) = rest.strip_prefix("UNC\\") {
+            return PathBuf::from(format!(r"\\{unc}"));
+        }
+    }
+    p
+}
+
+/// The form an existing absolute folder is indexed under, with symlinks and Windows 8.3 short
+/// names resolved exactly as roots are when added. Anything else is returned unchanged.
+pub fn resolve_dir(dir: &str) -> String {
+    let p = Path::new(dir);
+    if !p.is_absolute() {
+        return dir.to_string();
+    }
+    match std::fs::canonicalize(p) {
+        Ok(c) => path_str(&simplify_path(c)),
+        Err(_) => dir.to_string(),
+    }
 }
 
 /// Form used for case-insensitive prefix/substring filtering: forward slashes and, on

@@ -59,19 +59,7 @@ pub struct Engine {
 
 type CountCache = (Instant, HashMap<Status, u64>, HashMap<i64, u64>);
 
-/// `\\?\C:\x` → `C:\x` (canonicalize on Windows returns verbatim paths).
-pub fn simplify_path(p: PathBuf) -> PathBuf {
-    let s = p.to_string_lossy();
-    if let Some(rest) = s.strip_prefix(r"\\?\") {
-        if rest.len() >= 2 && rest.as_bytes()[1] == b':' {
-            return PathBuf::from(rest);
-        }
-        if let Some(unc) = rest.strip_prefix("UNC\\") {
-            return PathBuf::from(format!(r"\\{unc}"));
-        }
-    }
-    p
-}
+pub use crate::util::simplify_path;
 
 fn is_under(child: &str, parent: &str) -> bool {
     let c = filter_form(child);
