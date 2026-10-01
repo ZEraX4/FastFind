@@ -38,7 +38,7 @@ html-escape = "0.2"
 unicode-normalization = "0.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 tempfile = "3"
-zstd = "0.13"
+zstd = "0.14"
 flate2 = "1"
 
 [target.'cfg(windows)'.dependencies]
