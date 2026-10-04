@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 — 2026-10-04
 
 * OCR now works for files whose name or folder contains characters outside the Windows
   system code page, such as Turkish "Geçiş izni.jpg" on a non-Turkish system, or Arabic and
@@ -8,6 +8,7 @@
   "cannot read input file". Images now reach Tesseract as data, never as a path, and PDF
   pages no longer go through temporary files. Files that failed this way are retried
   automatically after updating.
+* Updated Tauri and its plugins to their latest patch releases.
 
 ## 1.1.0 — 2026-10-04
 
