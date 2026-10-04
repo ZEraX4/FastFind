@@ -1404,7 +1404,7 @@ checksum = "9afc2bd4d5a73106dd53d10d73d3401c2f32730ba2c0b93ddb888a8983680471"
 
 [[package]]
 name = "fastfind"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "fastfind-core",
  "parking_lot",
@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "fastfind-cli"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "fastfind-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "calamine",

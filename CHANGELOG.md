@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-10-04
 
 * In-app updates. FastFind asks once whether it may check GitHub for a new version (at most
   daily); updates are signed, shown with their release notes and installed only when you click

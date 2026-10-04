@@ -208,9 +208,9 @@ signing key in `TAURI_SIGNING_PRIVATE_KEY` (see *Releasing* below).
 
 | Platform | Artifacts |
 |---|---|
-| Windows | `nsis/FastFind_1.0.0_x64-setup.exe` (per-user installer), `msi/FastFind_1.0.0_x64_en-US.msi` |
-| macOS | `macos/FastFind.app`, `dmg/FastFind_1.0.0_universal.dmg` (use `--target universal-apple-darwin`) |
-| Linux | `appimage/FastFind_1.0.0_amd64.AppImage`, `deb/FastFind_1.0.0_amd64.deb` |
+| Windows | `nsis/FastFind_<version>_x64-setup.exe` (per-user installer), `msi/FastFind_<version>_x64_en-US.msi` |
+| macOS | `macos/FastFind.app`, `dmg/FastFind_<version>_universal.dmg` (use `--target universal-apple-darwin`) |
+| Linux | `appimage/FastFind_<version>_amd64.AppImage`, `deb/FastFind_<version>_amd64.deb` |
 
 Run `scripts/fetch-pdfium.*` for the target platform before building so PDFium is bundled.
 
