@@ -86,11 +86,12 @@ struct Output {
     stderr: String,
 }
 
-/// Run Tesseract with a timeout, capturing stdout and (bounded) stderr. Failing to start the
-/// program is a setup problem; a timeout is reported as `timeout_error`.
-fn run_tesseract(tesseract: &Path, args: &[&OsStr], timeout: Duration, timeout_error: OcrError) -> Result<Output, OcrError> {
+/// Run Tesseract with a timeout, capturing stdout and (bounded) stderr, optionally feeding
+/// `input` on stdin. Failing to start the program is a setup problem; a timeout is reported
+/// as `timeout_error`.
+fn run_tesseract(tesseract: &Path, args: &[&OsStr], input: Option<Vec<u8>>, timeout: Duration, timeout_error: OcrError) -> Result<Output, OcrError> {
     let mut cmd = Command::new(tesseract);
-    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.args(args).stdin(if input.is_some() { Stdio::piped() } else { Stdio::null() }).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -98,6 +99,13 @@ fn run_tesseract(tesseract: &Path, args: &[&OsStr], timeout: Duration, timeout_e
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     let mut child = cmd.spawn().map_err(|e| OcrError::Setup(format!("Tesseract could not be started ({}): {e}", tesseract.display())))?;
+    // Write stdin on its own thread so a large image cannot deadlock against unread output.
+    if let (Some(data), Some(mut stdin)) = (input, child.stdin.take()) {
+        std::thread::spawn(move || {
+            use std::io::Write;
+            let _ = stdin.write_all(&data);
+        });
+    }
     let out = read_bounded(child.stdout.take(), 64 << 20);
     let err = read_bounded(child.stderr.take(), 64 << 10);
     let start = Instant::now();
@@ -133,10 +141,30 @@ fn is_setup_failure(stderr: &str) -> bool {
     ["Failed loading language", "Error opening data file", "Could not initialize tesseract"].iter().any(|m| stderr.contains(m))
 }
 
+/// Images larger than this are not sent to Tesseract (it would need several times as much
+/// memory to decode them).
+const MAX_IMAGE_BYTES: u64 = 256 << 20;
+
 /// Run Tesseract on one image file with a timeout.
+///
+/// The image is read here and passed on stdin, never by path: on Windows, Tesseract opens
+/// files through the legacy code page, so a name with characters outside it (Turkish
+/// "Geçiş izni.jpg" on a non-Turkish system, Arabic or Chinese names elsewhere) would fail
+/// with "cannot read input file".
 pub fn ocr_image(tesseract: &Path, image: &Path, languages: &str) -> Result<String, OcrError> {
-    let args: [&OsStr; 4] = [image.as_os_str(), "stdout".as_ref(), "-l".as_ref(), languages.as_ref()];
-    let out = run_tesseract(tesseract, &args, PAGE_TIMEOUT, OcrError::File("OCR timed out".into()))?;
+    let size = std::fs::metadata(image).map_err(|e| OcrError::File(format!("cannot read the image: {e}")))?.len();
+    if size > MAX_IMAGE_BYTES {
+        return Err(OcrError::File(format!("image is too large for OCR ({} MB)", size >> 20)));
+    }
+    let data = std::fs::read(image).map_err(|e| OcrError::File(format!("cannot read the image: {e}")))?;
+    ocr_image_data(tesseract, data, languages)
+}
+
+/// Run Tesseract on image data (any format Tesseract reads: PNG, JPEG, TIFF incl. multi-page,
+/// BMP, GIF, WebP) with a timeout.
+pub fn ocr_image_data(tesseract: &Path, data: Vec<u8>, languages: &str) -> Result<String, OcrError> {
+    let args: [&OsStr; 4] = ["stdin".as_ref(), "stdout".as_ref(), "-l".as_ref(), languages.as_ref()];
+    let out = run_tesseract(tesseract, &args, Some(data), PAGE_TIMEOUT, OcrError::File("OCR timed out".into()))?;
     if out.success {
         return Ok(out.stdout);
     }
@@ -183,7 +211,7 @@ pub fn probe(settings: &crate::config::OcrSettings) -> OcrSetup {
     };
     setup.tesseract = Some(crate::util::path_str(&t));
     let probe_timeout = OcrError::Setup("Tesseract did not respond.".into());
-    match run_tesseract(&t, &["--version".as_ref()], Duration::from_secs(15), probe_timeout.clone()) {
+    match run_tesseract(&t, &["--version".as_ref()], None, Duration::from_secs(15), probe_timeout.clone()) {
         // Tesseract 4 prints its version to stderr, 5 to stdout.
         Ok(o) => setup.version = o.stdout.lines().chain(o.stderr.lines()).find_map(|l| l.trim().strip_prefix("tesseract ")).map(|v| v.trim_start_matches('v').to_string()),
         Err(e) => {
@@ -191,7 +219,7 @@ pub fn probe(settings: &crate::config::OcrSettings) -> OcrSetup {
             return setup;
         }
     }
-    match run_tesseract(&t, &["--list-langs".as_ref()], Duration::from_secs(15), probe_timeout) {
+    match run_tesseract(&t, &["--list-langs".as_ref()], None, Duration::from_secs(15), probe_timeout) {
         Ok(o) => {
             let text = if o.stdout.trim().is_empty() { o.stderr } else { o.stdout };
             setup.languages = text.lines().skip_while(|l| !l.contains("List of available languages")).skip(1).map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect();
@@ -218,7 +246,6 @@ pub fn probe(settings: &crate::config::OcrSettings) -> OcrSetup {
 /// OCR a scanned PDF page by page into `sink` (with page anchors). `stop` is polled before
 /// each page; when it fires the result is `Interrupted`, never a partial document.
 pub fn ocr_pdf(tesseract: &Path, pdf: &Path, languages: &str, sink: &mut TextSink, stop: &dyn Fn() -> bool) -> Result<u32, OcrError> {
-    let tmp = tempfile::Builder::new().prefix("fastfind-ocr").tempdir().map_err(|e| OcrError::File(e.to_string()))?;
     let mut err = None;
     let mut stopped = false;
     let pages = crate::parsers::pdf::render_pages(pdf, MAX_OCR_PAGES, RENDER_WIDTH, |n, img| {
@@ -226,12 +253,14 @@ pub fn ocr_pdf(tesseract: &Path, pdf: &Path, languages: &str, sink: &mut TextSin
             stopped = true;
             return false;
         }
-        let png = tmp.path().join(format!("p{n}.png"));
-        if let Err(e) = img.to_luma8().save(&png) {
+        // Encoded in memory and passed on stdin: no temporary files, whose path (e.g. a temp
+        // folder under a non-ASCII user name) Tesseract might not be able to open.
+        let mut png = Vec::new();
+        if let Err(e) = img.to_luma8().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png) {
             err = Some(OcrError::File(e.to_string()));
             return false;
         }
-        match ocr_image(tesseract, &png, languages) {
+        match ocr_image_data(tesseract, png, languages) {
             Ok(text) => {
                 sink.newline();
                 sink.anchor(LocKind::Page(n));
@@ -242,7 +271,6 @@ pub fn ocr_pdf(tesseract: &Path, pdf: &Path, languages: &str, sink: &mut TextSin
                 return false;
             }
         }
-        let _ = std::fs::remove_file(&png);
         !sink.is_full()
     })
     .map_err(|e| OcrError::File(e.to_string()))?;

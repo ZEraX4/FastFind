@@ -469,10 +469,16 @@ impl Catalog {
     /// fixed Tesseract path or language list gets another try). Images only when image OCR is
     /// on. Returns rows changed.
     pub fn requeue_failed_ocr(&self, images: bool) -> Result<usize> {
+        self.requeue_failed_ocr_like("OCR failed:%", images)
+    }
+
+    /// Like `requeue_failed_ocr`, limited to failures whose reason matches the SQL `LIKE`
+    /// pattern (used to retry failures caused by a since-fixed bug).
+    pub fn requeue_failed_ocr_like(&self, reason_like: &str, images: bool) -> Result<usize> {
         let n = self.write.lock().execute(
             "UPDATE files SET status=5, reason='waiting for OCR (retry)', flags=flags|?1
-             WHERE status=3 AND reason LIKE 'OCR failed:%' AND (kind<>'image' OR ?2)",
-            rusqlite::params![crate::model::flags::NEEDS_OCR as i64, images],
+             WHERE status=3 AND reason LIKE 'OCR failed:%' AND reason LIKE ?3 AND (kind<>'image' OR ?2)",
+            rusqlite::params![crate::model::flags::NEEDS_OCR as i64, images, reason_like],
         )?;
         Ok(n)
     }
