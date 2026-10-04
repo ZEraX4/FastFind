@@ -2,7 +2,8 @@
 
 Fast, local full-text search for your files. FastFind indexes the text inside documents, PDFs,
 spreadsheets, presentations, e-books, web pages and source code, then answers queries in
-milliseconds. It runs entirely on your computer: no cloud, no telemetry.
+milliseconds. It runs entirely on your computer: no cloud, no telemetry. The only network
+request it ever makes is an optional, opt-in update check.
 
 <p align="center">
  <img width="1603" height="1027" alt="image" src="https://github.com/user-attachments/assets/692810db-1637-4612-8d4c-5db526afc97d" />
@@ -196,10 +197,12 @@ files are slower). Run the benchmark twice to compare warm-cache results.
 ## Packaging
 
 ```bash
-npm run tauri build
+npm run build:unsigned
 ```
 
-This produces platform installers in `target/release/bundle/`:
+This produces platform installers in `target/release/bundle/`. `build:unsigned` skips the
+signed update packages; a plain `npm run tauri build` makes them too, but needs the update
+signing key in `TAURI_SIGNING_PRIVATE_KEY` (see *Releasing* below).
 
 | Platform | Artifacts |
 |---|---|
@@ -208,15 +211,42 @@ This produces platform installers in `target/release/bundle/`:
 | Linux | `appimage/FastFind_1.0.0_amd64.AppImage`, `deb/FastFind_1.0.0_amd64.deb` |
 
 Run `scripts/fetch-pdfium.*` for the target platform before building so PDFium is bundled.
-Tagged pushes (`v*`) build all three platforms in CI (`.github/workflows/release.yml`) and
-attach the installers to a draft GitHub release. Code signing (Windows Authenticode, Apple
-notarisation) is enabled by adding the corresponding secrets.
+
+### Releasing
+
+Tagged pushes (`v*`) build all three platforms in CI (`.github/workflows/release.yml`), sign the
+update packages and attach everything, including `latest.json` (the update manifest), to a draft
+GitHub release. Installed copies only see a release after you publish the draft.
+
+1. Bump `version` in `Cargo.toml`, `package.json` and `src-tauri/tauri.conf.json`, and add a
+   `CHANGELOG.md` entry.
+2. Commit, then tag and push: `git tag -a v1.1.0 -m "FastFind 1.1.0"` and
+   `git push origin main v1.1.0`.
+3. Check the draft's assets, paste the changelog entry as the release notes (the update banner
+   shows them under *What's new*) and publish.
+
+**Update signing key (one-time setup).** Updates are verified with a key pair that only you hold.
+Generate it once, outside the repository:
+
+```bash
+npx tauri signer generate -w ~/.tauri/fastfind.key
+```
+
+Put the contents of `fastfind.key.pub` into `plugins.updater.pubkey` in
+`src-tauri/tauri.conf.json`. Add two repository secrets under *Settings → Secrets and variables →
+Actions*: `TAURI_SIGNING_PRIVATE_KEY` (the contents of `fastfind.key`) and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Back the private key and password up somewhere safe: if they
+are lost, installed copies can never be updated again and users must reinstall by hand. The
+release workflow refuses to run until both are configured.
+
+**OS code signing (optional).** Without it Windows SmartScreen and macOS Gatekeeper warn on first
+launch. Add a Windows code-signing certificate and the `APPLE_*` notarisation secrets to remove
+the warnings.
 
 **Flatpak:** the AppImage/deb cover most distributions. A Flatpak manifest can wrap the
 `deb` payload with the `org.gnome.Platform` runtime (WebKitGTK), but is not included yet.
 
-**Automatic updates:** the app has no online dependency. Updates can be added with
-`tauri-plugin-updater` and a signed static manifest; see `docs/ARCHITECTURE.md` §7.
+**Updates:** see *Updates* under *Using FastFind*.
 
 ---
 
@@ -284,9 +314,25 @@ fastfind-cli problems --status failed
 The CLI uses the same data directory as the app. Close the app first, because the index
 allows a single writer. Use `--data-dir` or `FASTFIND_DATA_DIR` for a separate index.
 
+### Updates
+
+On first launch FastFind asks whether it may check for updates. If you agree, it asks GitHub
+once a day whether a newer version exists. That request is the only network access FastFind
+makes, and it sends nothing about your files. You can change the choice or check by hand in
+*Settings → Updates*.
+
+When an update is available, a banner offers *What's new* and *Install and restart*. Nothing
+is installed until you click it. The download is checked against FastFind's signing key, and a
+modified or older package is rejected. The index is closed cleanly, the new version is
+installed, and FastFind restarts. Windows installers, the macOS app and the Linux AppImage
+update themselves. With the `.deb`, the banner links to the download page instead.
+
+Copies of 1.0.0 have no updater, so install the first version that has one by hand.
+
 ### Privacy and logs
 
-FastFind never uploads files or their contents and contains no telemetry. Logs (JSON lines,
+FastFind never uploads files or their contents and contains no telemetry. The only network
+request is the optional update check described above. Logs (JSON lines,
 kept for 7 days in the data folder's `logs/`) record paths, timings and error messages, never
 document text. Set `FASTFIND_LOG=debug` for more detail.
 

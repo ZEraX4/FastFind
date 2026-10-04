@@ -38,7 +38,9 @@ OCR tests run only when Tesseract is installed and are skipped otherwise.
   the folder they were saved from. Strip these before committing a new fixture.
 * **Performance.** Changes to the index, scanner or search path should include before/after
   numbers from `fastfind-cli benchmark` (see *Benchmarks* in the README).
-* **Local only.** FastFind must never send files, text or usage data over the network.
+* **Local only.** FastFind must never send files, text or usage data over the network. The
+  opt-in update check in `src-tauri/src/updates.rs` is the only network access; don't add more.
+* **Building installers.** Use `npm run build:unsigned` unless you have the update signing key.
 * **Style.** `cargo fmt` for Rust; match the surrounding code in the UI.
 
 ## Reporting bugs

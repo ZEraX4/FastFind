@@ -196,7 +196,13 @@ Location anchors recorded during extraction map a byte offset to `Page 3`, `≈ 
 
 ## 6. Security
 
-* Local only: no network access, no telemetry. OCR, if enabled, is a local program.
+* Local only: no telemetry, and no network access except the opt-in update check. That check
+  lives in the backend (`src-tauri/src/updates.rs`); the web view has no network permission.
+  It runs only after the user agrees on first launch, at most once a day, and sends nothing
+  about the user's files. Update packages are verified with the minisign public key in
+  `tauri.conf.json`, and `requireSignedVersion` blocks downgrades to older signed releases.
+  Before the installer runs, the engine commits and closes the index and stops the PDF helpers.
+  OCR, if enabled, is a local program.
 * Web view: strict CSP (`script-src 'self'`); no opener permission for the web view. The
   backend opens only paths present in the index. Document text is always inserted as text nodes.
 * Parsers: size, time, depth, decompression and entity limits (R11); each call is isolated,
@@ -207,9 +213,6 @@ Location anchors recorded during extraction map a byte offset to `Page 3`, `≈ 
 
 ## 7. Future work
 
-* **Automatic updates:** add `tauri-plugin-updater` with a signed static JSON manifest
-  (GitHub Releases or any static host). Nothing in the app depends on an online service. The
-  release workflow already produces the artifacts, and signing keys come from CI secrets.
 * A Flatpak manifest (the AppImage and .deb are produced today).
 * Extracting images embedded in Office documents for OCR.
 

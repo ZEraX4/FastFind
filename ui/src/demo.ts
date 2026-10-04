@@ -57,6 +57,7 @@ let settings: Settings = {
   },
   performance: { cpu: "balanced", memoryCacheMb: 256, background: "automatic" },
   appearance: { theme: "system", fontScale: 1, highContrast: false, showPreview: true },
+  updates: { checkAutomatically: null },
 };
 
 export function demoApi(): Api {

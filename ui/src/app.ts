@@ -7,6 +7,7 @@ import { ago, bytes, duration, KIND_OPTIONS, num } from "./format";
 import { I } from "./icons";
 import { PreviewPane } from "./preview";
 import { ResultsList } from "./results";
+import { Updates } from "./updates";
 
 const MODES: [SearchMode, string, string][] = [
   ["smart", "Smart", "Words, phrases, AND/OR/NOT and filters"],
@@ -64,6 +65,7 @@ export class App {
   private filtersPanel!: HTMLElement;
   private regexBanner!: HTMLElement;
   private indexBanner!: HTMLElement;
+  private updates: Updates | null = null;
   private summary!: HTMLElement;
   private sortSel!: HTMLSelectElement;
   private resultsHost!: HTMLElement;
@@ -108,6 +110,7 @@ export class App {
     this.api.onIndexUpdated((g) => this.onIndexUpdated(g));
     document.addEventListener("keydown", this.keyHandler);
     await this.refreshStatus();
+    this.updates?.start();
     this.input.focus();
   }
 
@@ -184,6 +187,15 @@ export class App {
     this.filtersPanel = h("section", { class: "filters", hidden: true, "aria-label": "Filters" });
     this.regexBanner = h("div", { class: "banner regex", hidden: true, role: "note" }, icon(I.alert), "Regex mode scans document text and is slower than Smart search on large indexes. Filters (type, folder, date) make it faster.");
     this.indexBanner = h("div", { class: "banner indexing", hidden: true, role: "status" });
+    if (this.api.updates) {
+      this.updates = new Updates(this.api.updates, {
+        settings: () => this.settings,
+        saveSettings: async (s) => {
+          this.settings = await this.api.saveSettings(s);
+        },
+        toast: (m, e) => this.toast(m, e),
+      });
+    }
 
     this.sortSel = h(
       "select",
@@ -209,7 +221,7 @@ export class App {
     this.live = h("div", { class: "sr-only", "aria-live": "assertive" });
     this.toasts = h("div", { class: "toasts", "aria-live": "polite" });
     clear(this.root);
-    this.root.append(header, searchRow, rootsRow, this.filtersPanel, this.regexBanner, this.indexBanner, summaryRow, this.split, this.live, this.toasts);
+    this.root.append(header, searchRow, rootsRow, this.filtersPanel, this.regexBanner, this.indexBanner, ...(this.updates ? [this.updates.el] : []), summaryRow, this.split, this.live, this.toasts);
     this.buildFilters();
     this.syncControls();
     this.showEmpty();
@@ -599,7 +611,7 @@ export class App {
       this.applyAppearance();
       if (searchChanged) void this.runSearch();
       this.toast("Settings saved");
-    });
+    }, this.updates);
   }
 
   private applyAppearance(): void {

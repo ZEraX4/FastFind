@@ -198,11 +198,20 @@ impl Default for AppearanceSettings {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
+pub struct UpdateSettings {
+    /// Daily check for a new version. `None` until the user has been asked: FastFind makes no
+    /// network request without consent.
+    pub check_automatically: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub search: SearchSettings,
     pub indexing: IndexingSettings,
     pub performance: PerformanceSettings,
     pub appearance: AppearanceSettings,
+    pub updates: UpdateSettings,
 }
 
 impl Settings {
@@ -328,6 +337,10 @@ mod tests {
         let l = Settings::load(&p);
         assert!(l.search.whole_word);
         assert_eq!(l.indexing, IndexingSettings::default());
+        // Settings from 1.0.0 have no `updates` section: the user has not been asked yet.
+        assert_eq!(l.updates.check_automatically, None);
+        std::fs::write(&p, r#"{"updates":{"checkAutomatically":false}}"#).unwrap();
+        assert_eq!(Settings::load(&p).updates.check_automatically, Some(false));
     }
 
     #[test]

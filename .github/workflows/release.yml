@@ -29,6 +29,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - name: Check update signing is configured
+        shell: bash
+        env:
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          if grep -q REPLACE_WITH_UPDATER_PUBLIC_KEY src-tauri/tauri.conf.json; then
+            echo "::error::Set plugins.updater.pubkey in src-tauri/tauri.conf.json (see README, Releasing)."; exit 1
+          fi
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "::error::Add the TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD repository secrets."; exit 1
+          fi
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
@@ -45,11 +56,14 @@ jobs:
       - name: Fetch PDFium
         run: ${{ matrix.pdfium }}
       - run: npm ci
-      # Signing: set TAURI_SIGNING_PRIVATE_KEY (updater), APPLE_* (notarisation) and a
-      # Windows code-signing certificate as repository secrets to produce signed installers.
+      # Update signing (required): TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) sign the update
+      # packages and tauri-action uploads latest.json, the manifest installed copies check.
+      # OS code signing (optional): add APPLE_* (notarisation) and a Windows certificate.
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: FastFind ${{ github.ref_name }}

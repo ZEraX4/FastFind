@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod updates;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -38,6 +39,8 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::UpdateState::default())
         .setup(move |app| {
             let t0 = Instant::now();
             tracing::info!("window runtime ready; opening engine");
@@ -77,6 +80,7 @@ fn main() {
                 }
             });
             app.manage(AppState { engine, search_cancel: Mutex::new(Default::default()) });
+            updates::spawn_auto_check(app.handle().clone());
             tracing::info!(ms = t0.elapsed().as_millis() as u64, "engine ready");
             Ok(())
         })
@@ -99,6 +103,9 @@ fn main() {
             commands::reveal_file,
             commands::open_logs,
             commands::supported_extensions,
+            updates::check_for_update,
+            updates::install_update,
+            updates::open_release_page,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build FastFind");

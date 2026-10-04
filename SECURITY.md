@@ -9,6 +9,7 @@ problem. You'll get a reply within a week.
 
 In scope: crashes, hangs or memory exhaustion caused by a crafted file that escapes the
 existing limits (size, time, zip-bomb and nesting guards); reading or opening files outside
-indexed folders; any network access; and the Tauri IPC surface.
+indexed folders; any network access other than the opt-in update check; installing an update
+that is not validly signed or is older than the installed version; and the Tauri IPC surface.
 
 Supported versions: the latest release.

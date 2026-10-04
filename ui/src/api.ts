@@ -203,6 +203,31 @@ export interface Settings {
     highContrast: boolean;
     showPreview: boolean;
   };
+  updates: {
+    /** null until the user has been asked; no network request is made before that. */
+    checkAutomatically: boolean | null;
+  };
+}
+
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+  date: string | null;
+  /** False for Linux package-manager installs: offer the download page instead. */
+  canInstall: boolean;
+}
+
+/** Signed in-app updates (desktop app only; the network request happens in the backend). */
+export interface UpdateApi {
+  check(): Promise<UpdateInfo | null>;
+  /** Downloads, verifies and installs the update found by the last check, then restarts. */
+  install(): Promise<void>;
+  openReleasePage(): Promise<void>;
+  onAvailable(cb: (info: UpdateInfo) => void): void;
+  onProgress(cb: (downloaded: number, total: number | null) => void): void;
+  /** Installing failed after the index was closed; the app restarts the current version. */
+  onRestarting(cb: (error: string) => void): void;
 }
 
 export interface Api {
@@ -227,6 +252,8 @@ export interface Api {
   onIndexUpdated(cb: (generation: number) => void): void;
   /** Present in the desktop app, whose window has no native title bar. */
   window?: WindowControls;
+  /** Present in the desktop app only. */
+  updates?: UpdateApi;
 }
 
 export interface WindowControls {
@@ -286,6 +313,20 @@ export async function tauriApi(): Promise<Api> {
     },
     onIndexUpdated: (cb) => {
       void listen<number>("index-updated", (e) => cb(e.payload));
+    },
+    updates: {
+      check: () => invoke("check_for_update"),
+      install: () => invoke("install_update"),
+      openReleasePage: () => invoke("open_release_page"),
+      onAvailable: (cb) => {
+        void listen<UpdateInfo>("update-available", (e) => cb(e.payload));
+      },
+      onProgress: (cb) => {
+        void listen<{ downloaded: number; total: number | null }>("update-progress", (e) => cb(e.payload.downloaded, e.payload.total));
+      },
+      onRestarting: (cb) => {
+        void listen<string>("update-failed-restarting", (e) => cb(e.payload));
+      },
     },
     window: {
       nativeButtons: isMac,

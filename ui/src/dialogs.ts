@@ -4,6 +4,7 @@ import type { Api, IndexStatus, Settings, SkippedFile } from "./api";
 import { clear, h, icon, modLabel } from "./dom";
 import { ago, bytes, num } from "./format";
 import { I } from "./icons";
+import type { Updates } from "./updates";
 
 /** Open a native modal <dialog> (with a fallback for environments without showModal). */
 export function modal(title: string, body: HTMLElement, footer: HTMLElement[] = [], cls = ""): HTMLDialogElement {
@@ -105,7 +106,7 @@ function textInput(label: string, get: Get<string>, set: Set<string>, hint?: str
   return field(label, i, hint);
 }
 
-export async function openSettings(api: Api, current: Settings, onSaved: (s: Settings) => void): Promise<void> {
+export async function openSettings(api: Api, current: Settings, onSaved: (s: Settings) => void, updates: Updates | null = null): Promise<void> {
   const s: Settings = structuredClone(current);
   const tabs: [string, () => HTMLElement][] = [
     ["Search", () => h(
@@ -166,8 +167,10 @@ export async function openSettings(api: Api, current: Settings, onSaved: (s: Set
         h("li", {}, "The index is stored only in FastFind's data folder on this computer."),
         h("li", {}, "Log files contain file paths and error messages, never document text."),
         h("li", {}, "OCR (if enabled) runs a local Tesseract program; nothing leaves the machine."),
+        h("li", {}, "The only network request FastFind makes is the update check, and only if you allow it (Settings → Updates). It asks GitHub whether a newer version exists; nothing about your files is sent."),
       ),
     )],
+    ...(updates ? [["Updates", () => updatesPanel(api, s, updates)] as [string, () => HTMLElement]] : []),
     ["Diagnostics", () => diagnosticsPanel(api)],
   ];
   const tabList = h("div", { class: "tabs", role: "tablist" });
@@ -207,6 +210,37 @@ export async function openSettings(api: Api, current: Settings, onSaved: (s: Set
       save.removeAttribute("disabled");
     }
   });
+}
+
+function updatesPanel(api: Api, s: Settings, updates: Updates): HTMLElement {
+  const version = h("p", { class: "muted" }, "Installed version: …");
+  void api.diagnostics().then((d) => (version.textContent = `Installed version: ${d.version}`)).catch(() => {});
+  const result = h("span", { class: "muted small", role: "status" });
+  const checkBtn = h("button", { class: "btn" }, icon(I.refresh), "Check now") as HTMLButtonElement;
+  checkBtn.addEventListener("click", async () => {
+    checkBtn.setAttribute("disabled", "");
+    result.textContent = "Checking…";
+    try {
+      const info = await api.updates!.check();
+      result.textContent = info ? `FastFind ${info.version} is available — see the banner in the main window.` : "FastFind is up to date.";
+      if (info) updates.show(info);
+    } catch (e) {
+      result.textContent = String(e);
+    } finally {
+      checkBtn.removeAttribute("disabled");
+    }
+  });
+  return h(
+    "div", {},
+    version,
+    check(
+      "Check for updates automatically",
+      () => s.updates.checkAutomatically === true,
+      (v) => (s.updates.checkAutomatically = v),
+      "Once a day FastFind asks GitHub whether a newer version exists. Nothing about your files is sent. Updates are only installed when you choose to, and every download is verified with FastFind's signing key.",
+    ),
+    h("div", { class: "row-actions" }, checkBtn, result),
+  );
 }
 
 function diagnosticsPanel(api: Api): HTMLElement {

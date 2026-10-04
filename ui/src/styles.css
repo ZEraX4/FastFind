@@ -396,6 +396,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .banner.regex { background: var(--warn-weak); color: var(--warn); }
 .banner.indexing { background: var(--accent-weak); flex-direction: column; align-items: stretch; gap: 0.35rem; }
+.banner.update { background: var(--accent-weak); flex-wrap: wrap; }
+.banner.update > .icon { color: var(--accent); }
+.update-text { flex: 1 1 18rem; min-width: 0; }
+.update-progress { flex: 1; display: flex; flex-direction: column; gap: 0.35rem; }
+.release-notes { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow: auto; line-height: 1.5; }
+.row-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
 .banner-text { display: flex; gap: 0.25rem; align-items: baseline; min-width: 0; }
 .current-file { margin-left: auto; max-width: 45%; font-size: 0.8rem; }
 .progress { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }

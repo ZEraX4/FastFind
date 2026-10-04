@@ -29,8 +29,17 @@
       "freezePrototype": true
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_UPDATER_PUBLIC_KEY",
+      "endpoints": ["https://github.com/ZEraX4/FastFind/releases/latest/download/latest.json"],
+      "requireSignedVersion": true,
+      "windows": { "installMode": "passive" }
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis", "msi", "app", "dmg", "appimage", "deb"],
     "publisher": "FastFind",
     "category": "Productivity",
