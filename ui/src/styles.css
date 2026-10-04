@@ -654,3 +654,23 @@ table.problems th, table.problems td { padding: 0.4rem 0.6rem; border-bottom: 1p
   .split { grid-template-columns: 1fr 0 0; }
   .split .preview, .split .divider { display: none; }
 }
+
+/* Hosted website demo only (see demo.ts). */
+.demo-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.45rem 0.5rem 0.45rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+  z-index: 50;
+}
+.demo-notice a { color: var(--accent); font-weight: 600; white-space: nowrap; }

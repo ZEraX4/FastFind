@@ -8,6 +8,7 @@
     "build": "tsc --noEmit -p ui && vite build",
     "test": "vitest run",
     "tauri": "tauri",
+    "site:build": "node scripts/build-site.mjs",
     "build:unsigned": "tauri build --config src-tauri/tauri.unsigned.conf.json",
     "icons": "tauri icon ui/assets/icon.svg"
   },
