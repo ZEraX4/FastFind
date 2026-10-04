@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+* OCR now works for files whose name or folder contains characters outside the Windows
+  system code page, such as Turkish "Geçiş izni.jpg" on a non-Turkish system, or Arabic and
+  Chinese names. Before, Tesseract could not open them and the file was marked failed with
+  "cannot read input file". Images now reach Tesseract as data, never as a path, and PDF
+  pages no longer go through temporary files. Files that failed this way are retried
+  automatically after updating.
+
 ## 1.1.0 — 2026-10-04
 
 * In-app updates. FastFind asks once whether it may check GitHub for a new version (at most

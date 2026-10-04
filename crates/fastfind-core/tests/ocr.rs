@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use fastfind_core::config::AppPaths;
 use fastfind_core::gen::{write_pdf, write_scanned_pdf, ScanPage};
+use fastfind_core::index::catalog::{CatOp, FileRecord, Status};
 use fastfind_core::model::{flags, SearchRequest};
 use fastfind_core::parsers::locmap::describe;
 use fastfind_core::parsers::{pdf, TextSink};
@@ -265,5 +266,107 @@ fn unusable_ocr_setup_keeps_files_queued_until_fixed() {
     assert!(wait_for(Duration::from_secs(120), done), "status: {:?}", e.status().unwrap());
     let st = e.status().unwrap();
     assert_eq!((st.needs_ocr, st.failed, st.ocr_problem), (0, 0, None));
+    e.shutdown();
+}
+
+#[test]
+fn ocr_reads_files_with_non_ascii_names() {
+    // Tesseract on Windows opens files through the legacy code page, which cannot represent
+    // e.g. Turkish letters on most systems; FastFind must not depend on that.
+    let Some(tess) = tools() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let img = &scan_pages(dir.path(), &[&["The pelican crossing permit."]])[0];
+    let folder = dir.path().join("Araştırma ve Bilgi").join("Halep Ziyareti");
+    std::fs::create_dir_all(&folder).unwrap();
+    for name in ["Geçiş izni.png", "İzin belgesi ğüşöç.png", "تصريح.png", "通行证.png"] {
+        let path = folder.join(name);
+        img.save(&path).unwrap();
+        let text = ocr::ocr_image(&tess, &path, "eng").unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(contains_word(&text, "pelican"), "{name}: {text:?}");
+    }
+}
+
+fn ocr_engine(tmp: &Path) -> std::sync::Arc<Engine> {
+    let e = Engine::open(
+        AppPaths::new(tmp.join("data")),
+        EngineOptions { pdfium_dirs: vec![pdfium_dir()], watch: false, scan_on_start: false, pdf_worker_exe: None },
+    )
+    .unwrap();
+    let mut s = e.settings();
+    s.indexing.ocr.enabled = true;
+    s.indexing.ocr.images = true;
+    s.indexing.ocr.languages = "eng".into();
+    e.update_settings(s).unwrap();
+    e
+}
+
+fn ocr_done(e: &Engine, word: &str) -> bool {
+    wait_for(Duration::from_secs(120), || !names(e, word).is_empty() && e.status().is_ok_and(|st| st.needs_ocr == 0))
+}
+
+#[test]
+fn scans_in_folders_with_non_ascii_names_are_recognised() {
+    if tools().is_none() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Araştırma ve Bilgi").join("Halep Ziyareti");
+    std::fs::create_dir_all(&root).unwrap();
+    let imgs = scan_pages(tmp.path(), &[&["Permit for the flamingo reserve."], &["Visit to the walrus colony."]]);
+    imgs[0].save(root.join("Geçiş izni.jpg")).unwrap();
+    write_scan(&root.join("Ziyaret raporu ğüşİ.pdf"), &imgs[1..]);
+
+    let e = ocr_engine(tmp.path());
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(ocr_done(&e, "flamingo") && ocr_done(&e, "walrus"), "status: {:?}", e.status().unwrap());
+    assert_eq!(names(&e, "flamingo"), ["Geçiş izni.jpg"]);
+    assert_eq!(names(&e, "walrus"), ["Ziyaret raporu ğüşİ.pdf"]);
+    assert_eq!(e.status().unwrap().failed, 0);
+    e.shutdown();
+}
+
+#[test]
+fn files_that_failed_on_a_non_ascii_path_are_retried_after_upgrading() {
+    if tools().is_none() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Belgeler");
+    std::fs::create_dir_all(&root).unwrap();
+    let img = &scan_pages(tmp.path(), &[&["The heron migration notes."]])[0];
+    let path = root.join("Geçiş izni.png");
+    img.save(&path).unwrap();
+
+    // Index once, then rewrite the catalog entry as 1.1.0 left it: failed, file unchanged.
+    let e = ocr_engine(tmp.path());
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(ocr_done(&e, "heron"));
+    let root_id = e.catalog.roots().unwrap()[0].id;
+    let snap = e.catalog.snapshot(root_id, None).unwrap().into_values().next().unwrap();
+    let path_str = path.to_string_lossy().into_owned();
+    e.catalog
+        .apply(&[CatOp::Upsert(FileRecord {
+            root_id,
+            path: path_str.clone(),
+            size: snap.size,
+            mtime_ns: snap.mtime_ns,
+            hash: snap.hash,
+            kind: "image".into(),
+            status: Status::Failed,
+            reason: Some(format!("OCR failed: tesseract exited with exit code: 1: Error, cannot read input file {}: No such file or directory", path_str.replace('ş', "?"))),
+            flags: 0,
+        })])
+        .unwrap();
+    e.shutdown();
+    drop(e);
+
+    // The next start retries it, and it is recognised.
+    let e = ocr_engine(tmp.path());
+    assert!(
+        wait_for(Duration::from_secs(120), || e.status().is_ok_and(|st| st.failed == 0 && st.needs_ocr == 0 && st.indexed >= 1)),
+        "status: {:?}",
+        e.status().unwrap()
+    );
+    assert_eq!(names(&e, "heron"), ["Geçiş izni.png"]);
     e.shutdown();
 }

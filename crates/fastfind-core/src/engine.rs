@@ -91,6 +91,16 @@ impl Engine {
         }
         let pdf = crate::parsers::pdf::init(&opts.pdfium_dirs);
         let (catalog, cat_new) = Catalog::open(&paths.catalog_db, &paths.quarantine_dir)?;
+        if settings.indexing.ocr.enabled {
+            // Up to 1.1.0 Tesseract was given file paths, which it cannot open on Windows when
+            // they contain characters outside the legacy code page. Those files failed with
+            // "cannot read input file"; give them another try now that images go via stdin.
+            match catalog.requeue_failed_ocr_like("%cannot read input file%", settings.indexing.ocr.images) {
+                Ok(0) => {}
+                Ok(n) => tracing::info!(files = n, "retrying OCR for files whose path Tesseract could not open"),
+                Err(e) => tracing::warn!(error = %e, "could not requeue OCR failures"),
+            }
+        }
         // Tantivy's own indexing threads tokenize and invert text; they are the throughput
         // ceiling for text-heavy corpora, so they scale with the CPU preference.
         let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
