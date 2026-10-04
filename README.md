@@ -233,9 +233,9 @@ npx tauri signer generate -w ~/.tauri/fastfind.key
 ```
 
 Put the contents of `fastfind.key.pub` into `plugins.updater.pubkey` in
-`src-tauri/tauri.conf.json`. Add two repository secrets under *Settings → Secrets and variables →
-Actions*: `TAURI_SIGNING_PRIVATE_KEY` (the contents of `fastfind.key`) and
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Back the private key and password up somewhere safe: if they
+`src-tauri/tauri.conf.json`. Under *Settings → Environments*, create an environment named
+`Updater` and add two secrets to it: `TAURI_SIGNING_PRIVATE_KEY` (the contents of
+`fastfind.key`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The release job uses that environment. Back the private key and password up somewhere safe: if they
 are lost, installed copies can never be updated again and users must reinstall by hand. The
 release workflow refuses to run until both are configured.
 

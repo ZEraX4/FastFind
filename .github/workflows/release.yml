@@ -25,6 +25,9 @@ jobs:
             pdfium: scripts/fetch-pdfium.sh chromium/8066 linux-x64
             args: ""
     runs-on: ${{ matrix.os }}
+    # The update signing secrets live in the "Updater" environment; a job sees an
+    # environment's secrets only when it names it.
+    environment: Updater
     permissions:
       contents: write
     steps:
@@ -38,7 +41,7 @@ jobs:
             echo "::error::Set plugins.updater.pubkey in src-tauri/tauri.conf.json (see README, Releasing)."; exit 1
           fi
           if [ "$HAS_KEY" != "true" ]; then
-            echo "::error::Add the TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD repository secrets."; exit 1
+            echo "::error::Add the TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD secrets to the Updater environment."; exit 1
           fi
       - uses: dtolnay/rust-toolchain@stable
         with:
