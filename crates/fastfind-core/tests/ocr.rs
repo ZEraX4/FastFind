@@ -343,7 +343,9 @@ fn files_that_failed_on_a_non_ascii_path_are_retried_after_upgrading() {
     assert!(ocr_done(&e, "heron"));
     let root_id = e.catalog.roots().unwrap()[0].id;
     let snap = e.catalog.snapshot(root_id, None).unwrap().into_values().next().unwrap();
-    let path_str = path.to_string_lossy().into_owned();
+    // The path exactly as indexed: roots are stored resolved (on macOS the temp folder is
+    // /var/..., indexed as /private/var/...), so a path built here could name a second entry.
+    let path_str = e.search(&SearchRequest::new("heron"), &CancelToken::new()).unwrap().items.remove(0).path;
     e.catalog
         .apply(&[CatOp::Upsert(FileRecord {
             root_id,
