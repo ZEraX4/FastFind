@@ -104,7 +104,7 @@ export function demoApi(): Api {
     },
     async status(): Promise<IndexStatus> {
       return {
-        filesTotal: 1_284_392, indexed: 1_261_530, nameOnly: 20_372, skipped: 1_720, failed: 512, encrypted: 258, needsOcr: 1_204,
+        filesTotal: 1_284_392, indexed: 1_261_530, nameOnly: 20_372, skipped: 1_720, failed: 512, encrypted: 258, needsOcr: 1_204, ocrProblem: null,
         indexBytes: 2_576_980_378, textStoreBytes: 0, lastUpdated: now - 180,
         progress: { active: false, scanning: false, paused: false, discovered: 0, queued: 0, processed: 0, bytesProcessed: 0, filesPerSec: 0, percent: null, currentPath: null, ocrPending: 0 },
         roots: [
@@ -132,6 +132,7 @@ export function demoApi(): Api {
     async revealFile() {},
     async openLogs() {},
     async supportedExtensions() { return ["pdf", "docx", "xlsx"]; },
+    async checkOcr() { return { tesseract: "(demo)", version: "5.5.0", languages: ["eng"], missingLanguages: [], problem: null }; },
     async pickFolders() { return []; },
     onIndexUpdated() {},
   };

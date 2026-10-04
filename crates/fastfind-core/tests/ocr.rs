@@ -169,3 +169,99 @@ fn enabling_ocr_makes_scans_and_images_searchable() {
     assert_eq!(broken.flags & flags::NEEDS_OCR, 0);
     e.shutdown();
 }
+
+#[test]
+fn probe_explains_a_missing_or_wrong_tesseract() {
+    // No Tesseract needed: these paths never resolve to one.
+    let mut s = fastfind_core::config::OcrSettings { enabled: true, ..Default::default() };
+    s.tesseract_path = "/definitely/not/here/tesseract.exe".into();
+    let p = ocr::probe(&s);
+    assert!(p.tesseract.is_none());
+    assert!(p.problem.as_deref().unwrap().contains("not found at"), "{p:?}");
+
+    // An existing file that is not Tesseract is refused, never executed.
+    let other = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
+    s.tesseract_path = other.into();
+    assert!(ocr::find_tesseract(other).is_none());
+    assert!(ocr::probe(&s).problem.unwrap().contains("is not the Tesseract program"));
+}
+
+#[test]
+fn probe_lists_languages_and_reports_missing_ones() {
+    let Some(tess) = tools() else { return };
+    let mut s = fastfind_core::config::OcrSettings { enabled: true, languages: "eng".into(), ..Default::default() };
+    let ok = ocr::probe(&s);
+    assert_eq!(ok.problem, None, "{ok:?}");
+    assert!(ok.languages.iter().any(|l| l == "eng"), "{ok:?}");
+    assert!(ok.version.is_some(), "{ok:?}");
+
+    s.languages = "eng+zzz".into();
+    let bad = ocr::probe(&s);
+    assert_eq!(bad.missing_languages, ["zzz"]);
+    assert!(bad.problem.unwrap().contains("“zzz”"));
+
+    // When no configured language can be loaded Tesseract fails; that is a setup problem, not
+    // a bad file. (With "eng+zzz" it silently skips zzz, which the probe above reports.)
+    let dir = tempfile::tempdir().unwrap();
+    let img = &scan_pages(dir.path(), &[&["Setup check page."]])[0];
+    let png = dir.path().join("page.png");
+    img.save(&png).unwrap();
+    match ocr::ocr_image(&tess, &png, "zzz") {
+        Err(ocr::OcrError::Setup(m)) => assert!(m.contains("zzz"), "{m}"),
+        other => panic!("expected a setup error, got {other:?}"),
+    }
+    // ...while an unreadable image is.
+    let junk = dir.path().join("junk.png");
+    std::fs::write(&junk, b"\x89PNG\r\n\x1a\n not an image").unwrap();
+    assert!(matches!(ocr::ocr_image(&tess, &junk, "eng"), Err(ocr::OcrError::File(_))));
+}
+
+#[test]
+fn unusable_ocr_setup_keeps_files_queued_until_fixed() {
+    if tools().is_none() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("scans");
+    std::fs::create_dir_all(&root).unwrap();
+    let imgs = scan_pages(tmp.path(), &[&["The echidna survey results."]]);
+    write_scan(&root.join("survey-scan.pdf"), &imgs);
+
+    let e = Engine::open(
+        AppPaths::new(tmp.path().join("data")),
+        EngineOptions { pdfium_dirs: vec![pdfium_dir()], watch: false, scan_on_start: false, pdf_worker_exe: None },
+    )
+    .unwrap();
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(120)));
+    assert_eq!(e.status().unwrap().ocr_problem, None, "OCR is off: nothing to report");
+
+    let set = |path: &str, langs: &str| {
+        let mut s = e.settings();
+        s.indexing.ocr.enabled = true;
+        s.indexing.ocr.tesseract_path = path.into();
+        s.indexing.ocr.languages = langs.into();
+        e.update_settings(s).unwrap();
+    };
+    let problem = |needle: &str| {
+        wait_for(Duration::from_secs(30), || e.status().unwrap().ocr_problem.is_some_and(|p| p.contains(needle)))
+    };
+
+    // Tesseract not found: the problem is reported and the file keeps waiting.
+    set("/definitely/not/here/tesseract.exe", "eng");
+    assert!(problem("not found"), "status: {:?}", e.status().unwrap());
+    // No configured language installed (before this fix, every scan was marked failed for
+    // good): reported, and nothing is marked failed.
+    set("", "zzz");
+    assert!(problem("zzz"), "status: {:?}", e.status().unwrap());
+    std::thread::sleep(Duration::from_secs(2));
+    let st = e.status().unwrap();
+    assert_eq!((st.needs_ocr, st.failed), (1, 0), "the scan waits instead of failing: {st:?}");
+
+    // Fixing the setting lets OCR run.
+    set("", "eng");
+    assert!(wait_for(Duration::from_secs(120), || !names(&e, "echidna").is_empty()), "status: {:?}", e.status().unwrap());
+    let st = e.status().unwrap();
+    assert_eq!((st.needs_ocr, st.failed, st.ocr_problem), (0, 0, None));
+    e.shutdown();
+}

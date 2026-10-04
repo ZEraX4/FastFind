@@ -465,6 +465,18 @@ impl Catalog {
         Ok(n)
     }
 
+    /// Put files whose OCR failed back in the OCR queue (after the OCR settings change, so a
+    /// fixed Tesseract path or language list gets another try). Images only when image OCR is
+    /// on. Returns rows changed.
+    pub fn requeue_failed_ocr(&self, images: bool) -> Result<usize> {
+        let n = self.write.lock().execute(
+            "UPDATE files SET status=5, reason='waiting for OCR (retry)', flags=flags|?1
+             WHERE status=3 AND reason LIKE 'OCR failed:%' AND (kind<>'image' OR ?2)",
+            rusqlite::params![crate::model::flags::NEEDS_OCR as i64, images],
+        )?;
+        Ok(n)
+    }
+
     pub fn count_pending_ocr(&self) -> u64 {
         let c = self.read.lock();
         c.query_row("SELECT COUNT(*) FROM files WHERE status=5", [], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
@@ -524,6 +536,32 @@ mod tests {
         assert_eq!(c.paths_under("/r/a").unwrap().len(), 2);
         c.apply(&[CatOp::DeleteUnder { prefix: "/r/a".into() }]).unwrap();
         assert_eq!(c.snapshot(1, None).unwrap().len(), 1, "sibling /r/ab.txt must survive");
+    }
+
+    #[test]
+    fn failed_ocr_is_requeued() {
+        let dir = tempfile::tempdir().unwrap();
+        let (c, _) = Catalog::open(&dir.path().join("c.db"), &dir.path().join("q")).unwrap();
+        c.add_root("/r").unwrap();
+        let failed = |path: &str, kind: &str, reason: &str| FileRecord {
+            kind: kind.into(),
+            status: Status::Failed,
+            reason: Some(reason.into()),
+            ..rec(path, 1)
+        };
+        c.apply(&[
+            CatOp::Upsert(failed("/r/scan.pdf", "pdf", "OCR failed: tesseract exited with exit code: 1")),
+            CatOp::Upsert(failed("/r/photo.png", "image", "OCR failed: OCR timed out")),
+            CatOp::Upsert(failed("/r/broken.docx", "word", "invalid zip archive")),
+        ])
+        .unwrap();
+        assert_eq!(c.requeue_failed_ocr(false).unwrap(), 1, "PDF only while image OCR is off");
+        assert_eq!(c.count_pending_ocr(), 1);
+        let row = c.pending_ocr(5).unwrap().remove(0);
+        assert_eq!(row.path, "/r/scan.pdf");
+        assert_ne!(row.flags & crate::model::flags::NEEDS_OCR, 0);
+        assert_eq!(c.requeue_failed_ocr(true).unwrap(), 1, "then the image");
+        assert_eq!(c.count_pending_ocr(), 2, "a parser failure is not an OCR failure");
     }
 
     #[test]

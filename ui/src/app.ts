@@ -674,7 +674,7 @@ export class App {
     } else {
       this.statusBtn.append(icon(I.database), `Indexed: ${num(st.filesTotal)} files · ${bytes(st.indexBytes + st.textStoreBytes)} · Updated ${ago(st.lastUpdated)}`);
     }
-    this.statusBtn.title = `${num(st.filesTotal)} files indexed\n${num(st.indexed + st.nameOnly)} successful\n${num(st.skipped + st.failed + st.encrypted)} skipped${st.needsOcr ? `\n${num(st.needsOcr)} need OCR` : ""}`;
+    this.statusBtn.title = `${num(st.filesTotal)} files indexed\n${num(st.indexed + st.nameOnly)} successful\n${num(st.skipped + st.failed + st.encrypted)} skipped${st.needsOcr ? `\n${num(st.needsOcr)} need OCR${st.ocrProblem ? ` (waiting: ${st.ocrProblem})` : ""}` : ""}`;
     clear(this.indexBanner);
     this.indexBanner.hidden = !(p.active && !p.paused);
     if (!this.indexBanner.hidden) {

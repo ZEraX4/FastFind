@@ -188,6 +188,17 @@ impl Engine {
             tracing::info!(images = n, "image OCR enabled; queued existing images");
             self.invalidate_counts();
         }
+        let (o, n) = (&old.indexing.ocr, &new.indexing.ocr);
+        if n.enabled && (!o.enabled || o.languages != n.languages || o.tesseract_path != n.tesseract_path || n.images != o.images) {
+            // A fixed Tesseract path or language list deserves another try at files whose
+            // OCR failed (unchanged files are otherwise never looked at again).
+            let requeued = self.catalog.requeue_failed_ocr(n.images)?;
+            if requeued > 0 {
+                tracing::info!(files = requeued, "OCR settings changed; retrying files whose OCR failed");
+                self.invalidate_counts();
+            }
+        }
+        self.index.inner.wake_ocr();
         if indexing_changed(&old, &new) {
             tracing::info!("indexing settings changed; reconciling all roots");
             self.index.rescan_all();
@@ -356,6 +367,7 @@ impl Engine {
             failed: c(Status::Failed),
             encrypted: c(Status::Encrypted),
             needs_ocr: c(Status::NeedsOcr),
+            ocr_problem: if self.settings.read().indexing.ocr.enabled { self.index.inner.ocr_problem.read().clone() } else { None },
             index_bytes,
             text_store_bytes: text_bytes,
             last_updated: self.catalog.last_update(),
@@ -436,6 +448,12 @@ impl Engine {
 
     pub fn wait_idle(&self, timeout: Duration) -> bool {
         self.index.wait_idle(timeout)
+    }
+
+    /// Check the given OCR settings (not necessarily saved yet): Tesseract found and started,
+    /// configured languages installed.
+    pub fn check_ocr(&self, ocr: &crate::config::OcrSettings) -> crate::ocr::OcrSetup {
+        crate::ocr::probe(ocr)
     }
 
     pub fn shutdown(&self) {

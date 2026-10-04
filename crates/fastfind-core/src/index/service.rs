@@ -159,6 +159,8 @@ pub struct Inner {
     threads: Mutex<Vec<JoinHandle<()>>>,
     ocr_wakeup: Condvar,
     ocr_lock: Mutex<()>,
+    /// Why OCR cannot run right now (Tesseract missing, language not installed), for the UI.
+    pub ocr_problem: RwLock<Option<String>>,
 }
 
 #[derive(Clone)]
@@ -236,6 +238,7 @@ impl IndexService {
             threads: Mutex::new(Vec::new()),
             ocr_wakeup: Condvar::new(),
             ocr_lock: Mutex::new(()),
+            ocr_problem: RwLock::new(None),
         });
         let svc = IndexService { inner: inner.clone() };
         svc.refresh_roots();
@@ -545,6 +548,10 @@ impl Inner {
     pub fn busy(&self) -> bool {
         let p = &self.progress;
         p.scanning.load(Ordering::Relaxed) > 0 || p.dispatched.load(Ordering::Relaxed) > p.processed.load(Ordering::Relaxed)
+    }
+
+    pub fn wake_ocr(&self) {
+        self.ocr_wakeup.notify_all();
     }
 
     pub fn ocr_wait(&self, d: Duration) {

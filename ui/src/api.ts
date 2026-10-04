@@ -122,6 +122,8 @@ export interface IndexStatus {
   failed: number;
   encrypted: number;
   needsOcr: number;
+  /** OCR is on but cannot run (Tesseract missing, language not installed). */
+  ocrProblem: string | null;
   indexBytes: number;
   textStoreBytes: number;
   lastUpdated: number | null;
@@ -209,6 +211,15 @@ export interface Settings {
   };
 }
 
+export interface OcrSetup {
+  tesseract: string | null;
+  version: string | null;
+  languages: string[];
+  missingLanguages: string[];
+  /** Why OCR cannot run; null when ready. */
+  problem: string | null;
+}
+
 export interface UpdateInfo {
   version: string;
   currentVersion: string;
@@ -248,6 +259,8 @@ export interface Api {
   revealFile(path: string): Promise<void>;
   openLogs(): Promise<void>;
   supportedExtensions(): Promise<string[]>;
+  /** Checks OCR settings (possibly unsaved): Tesseract found and working, languages installed. */
+  checkOcr(ocr: Settings["indexing"]["ocr"]): Promise<OcrSetup>;
   pickFolders(): Promise<string[]>;
   onIndexUpdated(cb: (generation: number) => void): void;
   /** Present in the desktop app, whose window has no native title bar. */
@@ -306,6 +319,7 @@ export async function tauriApi(): Promise<Api> {
     revealFile: (path) => invoke("reveal_file", { path }),
     openLogs: () => invoke("open_logs"),
     supportedExtensions: () => invoke("supported_extensions"),
+    checkOcr: (ocr) => invoke("check_ocr", { ocr }),
     pickFolders: async () => {
       const r = await dialog.open({ directory: true, multiple: true, title: "Add folders to index" });
       if (r === null) return [];

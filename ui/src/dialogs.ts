@@ -1,7 +1,7 @@
 // Modal dialogs: settings, index details, skipped files, help.
 
 import type { Api, IndexStatus, Settings, SkippedFile } from "./api";
-import { clear, h, icon, modLabel } from "./dom";
+import { clear, debounce, h, icon, modLabel } from "./dom";
 import { ago, bytes, num } from "./format";
 import { I } from "./icons";
 import type { Updates } from "./updates";
@@ -106,6 +106,51 @@ function textInput(label: string, get: Get<string>, set: Set<string>, hint?: str
   return field(label, i, hint);
 }
 
+/** OCR settings with a live check of the Tesseract installation under them. */
+function ocrSection(api: Api, s: Settings): HTMLElement[] {
+  const status = h("div", { class: "ocr-status", role: "status", "aria-live": "polite", hidden: true });
+  let seq = 0;
+  const refresh = debounce(async () => {
+    const mine = ++seq;
+    if (!s.indexing.ocr.enabled) {
+      status.hidden = true;
+      return;
+    }
+    status.hidden = false;
+    status.className = "ocr-status";
+    status.replaceChildren("Checking Tesseract…");
+    try {
+      const r = await api.checkOcr(structuredClone(s.indexing.ocr));
+      if (mine !== seq) return;
+      status.className = `ocr-status ${r.problem ? "warn" : "ok"}`;
+      status.replaceChildren(
+        icon(r.problem ? I.alert : I.check),
+        h("span", {}, r.problem
+          ? `${r.problem} Scanned files wait until this is fixed; nothing is marked as failed.`
+          : `Tesseract ${r.version ?? ""} is ready. Installed languages: ${r.languages.filter((l) => l !== "osd").join(", ") || "none"}.`),
+      );
+    } catch (e) {
+      if (mine !== seq) return;
+      status.className = "ocr-status warn";
+      status.replaceChildren(icon(I.alert), h("span", {}, String(e)));
+    }
+  }, 300);
+  const o = s.indexing.ocr;
+  const changed = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    refresh();
+  };
+  refresh();
+  return [
+    h("h3", {}, "OCR (scanned documents)"),
+    check("Recognise text in scanned PDFs", () => o.enabled, changed((v: boolean) => (o.enabled = v)), "Uses a locally installed Tesseract. Runs in the background only when indexing is idle."),
+    check("Also recognise text in images", () => o.images, (v) => (o.images = v)),
+    textInput("OCR languages", () => o.languages, changed((v: string) => (o.languages = v)), "Tesseract language codes, e.g. eng or eng+deu.", "eng"),
+    textInput("Tesseract executable", () => o.tesseractPath, changed((v: string) => (o.tesseractPath = v)), "Leave empty to detect automatically.", "auto"),
+    status,
+  ];
+}
+
 export async function openSettings(api: Api, current: Settings, onSaved: (s: Settings) => void, updates: Updates | null = null): Promise<void> {
   const s: Settings = structuredClone(current);
   const tabs: [string, () => HTMLElement][] = [
@@ -137,11 +182,7 @@ export async function openSettings(api: Api, current: Settings, onSaved: (s: Set
       check("Watch folders for changes", () => s.indexing.watchChanges, (v) => (s.indexing.watchChanges = v)),
       numberInput("Full re-check interval (minutes, 0 = never)", 0, 10080, () => s.indexing.rescanIntervalMin, (v) => (s.indexing.rescanIntervalMin = v), "Catches changes that watchers miss, e.g. on network drives."),
       check("Skip unchanged files by content hash", () => s.indexing.contentHash, (v) => (s.indexing.contentHash = v)),
-      h("h3", {}, "OCR (scanned documents)"),
-      check("Recognise text in scanned PDFs", () => s.indexing.ocr.enabled, (v) => (s.indexing.ocr.enabled = v), "Uses a locally installed Tesseract. Runs in the background only when indexing is idle."),
-      check("Also recognise text in images", () => s.indexing.ocr.images, (v) => (s.indexing.ocr.images = v)),
-      textInput("OCR languages", () => s.indexing.ocr.languages, (v) => (s.indexing.ocr.languages = v), "Tesseract language codes, e.g. eng or eng+deu.", "eng"),
-      textInput("Tesseract executable", () => s.indexing.ocr.tesseractPath, (v) => (s.indexing.ocr.tesseractPath = v), "Leave empty to detect automatically.", "auto"),
+      ...ocrSection(api, s),
     )],
     ["Performance", () => h(
       "div", {},
@@ -307,6 +348,9 @@ export function openIndexPanel(api: Api, st: IndexStatus, actions: { refresh(): 
   const body = h(
     "div", { class: "index-panel" },
     summary,
+    st.ocrProblem && st.needsOcr > 0
+      ? h("div", { class: "ocr-status warn" }, icon(I.alert), h("span", {}, `${num(st.needsOcr)} scanned ${st.needsOcr === 1 ? "file is" : "files are"} waiting for OCR. ${st.ocrProblem} Check Settings → Indexing.`))
+      : null,
     p.active ? h("p", { class: "muted" }, `Indexing: ${num(p.processed)} processed, ${num(p.queued)} queued${p.filesPerSec > 0 ? ` · ${Math.round(p.filesPerSec)} files/s` : ""}`) : null,
     h("h3", {}, "Folders"),
     st.roots.length ? roots : h("p", { class: "muted" }, "No folders yet."),

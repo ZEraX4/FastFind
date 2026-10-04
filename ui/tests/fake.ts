@@ -1,5 +1,5 @@
 // Shared in-memory Api for UI tests.
-import type { Api, IndexStatus, Preview, ResultItem, RootInfo, SearchRequest, SearchResponse, Settings, SnippetResult, UpdateApi, WindowControls } from "../src/api";
+import type { Api, IndexStatus, OcrSetup, Preview, ResultItem, RootInfo, SearchRequest, SearchResponse, Settings, SnippetResult, UpdateApi, WindowControls } from "../src/api";
 
 export const settings = (): Settings => ({
   search: { defaultMode: "smart", caseSensitive: false, wholeWord: false, pageSize: 50, resultLimit: 10000, nameBoost: 3, metadataBoost: 1.5, phraseBoost: 2, verifyBudgetMs: 3000, regexBudgetMs: 10000 },
@@ -29,6 +29,10 @@ export class FakeApi implements Api {
   added: string[] = [];
   pick: string[] = ["/new/folder"];
   cfg = settings();
+  needsOcr = 0;
+  ocrProblem: string | null = null;
+  ocrChecks: Settings["indexing"]["ocr"][] = [];
+  ocrSetup: OcrSetup = { tesseract: "/usr/bin/tesseract", version: "5.5.0", languages: ["eng", "osd"], missingLanguages: [], problem: null };
   indexListener: ((g: number) => void) | null = null;
 
   async search(req: SearchRequest): Promise<SearchResponse> {
@@ -53,7 +57,7 @@ export class FakeApi implements Api {
   }
   async status(): Promise<IndexStatus> {
     return {
-      filesTotal: 4, indexed: 3, nameOnly: 1, skipped: 0, failed: 0, encrypted: 0, needsOcr: 0, indexBytes: 2048, textStoreBytes: 0, lastUpdated: Date.now() / 1000 - 180,
+      filesTotal: 4, indexed: 3, nameOnly: 1, skipped: 0, failed: 0, encrypted: 0, needsOcr: this.needsOcr, ocrProblem: this.ocrProblem, indexBytes: 2048, textStoreBytes: 0, lastUpdated: Date.now() / 1000 - 180,
       progress: { active: false, scanning: false, paused: false, discovered: 0, queued: 0, processed: 0, bytesProcessed: 0, filesPerSec: 0, percent: null, currentPath: null, ocrPending: 0 },
       roots: this.roots, generation: 1,
     };
@@ -76,6 +80,7 @@ export class FakeApi implements Api {
   async revealFile(p: string) { this.revealed.push(p); }
   async openLogs() {}
   async supportedExtensions() { return ["txt", "pdf"]; }
+  async checkOcr(ocr: Settings["indexing"]["ocr"]) { this.ocrChecks.push(structuredClone(ocr)); return structuredClone(this.ocrSetup); }
   async pickFolders() { return this.pick; }
   onIndexUpdated(cb: (g: number) => void) { this.indexListener = cb; }
 }

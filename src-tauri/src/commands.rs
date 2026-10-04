@@ -154,3 +154,10 @@ pub async fn open_logs(app: AppHandle, state: State<'_, AppState>) -> R<()> {
 pub async fn supported_extensions(state: State<'_, AppState>) -> R<Vec<String>> {
     Ok(state.engine.supported_extensions().into_iter().map(String::from).collect())
 }
+
+/// Checks OCR settings as edited in the Settings dialog (before saving).
+#[tauri::command]
+pub async fn check_ocr(state: State<'_, AppState>, ocr: fastfind_core::config::OcrSettings) -> R<fastfind_core::ocr::OcrSetup> {
+    let engine = state.engine.clone();
+    blocking(move || Ok(engine.check_ocr(&ocr))).await
+}

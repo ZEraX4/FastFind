@@ -130,6 +130,8 @@ npm test
   Tesseract recognising a page, a two-page scanned PDF keeping its page numbers, and the full
   flow from "Scanned PDF requiring OCR" to searchable once OCR is enabled in Settings,
   including existing images and an unreadable image that must not block the queue.
+* **OCR tests** (`tests/ocr.rs`) also cover setup problems: Tesseract missing, a wrong
+  executable, languages that are not installed, and that queued scans wait instead of failing.
 * **UI tests** (`ui/tests`, vitest + jsdom) cover search-as-you-type, debouncing, lazy
   snippets, HTML-injection safety, preview match navigation, keyboard navigation, open and
   reveal, modes, toggles, filters, adding folders, settings, help, the refresh offer,

@@ -103,6 +103,7 @@ fn main() {
             commands::reveal_file,
             commands::open_logs,
             commands::supported_extensions,
+            commands::check_ocr,
             updates::check_for_update,
             updates::install_update,
             updates::open_release_page,

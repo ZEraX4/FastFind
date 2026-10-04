@@ -242,6 +242,8 @@ pub struct IndexStatus {
     pub failed: u64,
     pub encrypted: u64,
     pub needs_ocr: u64,
+    /// Why files waiting for OCR are not being processed (OCR on but Tesseract unusable).
+    pub ocr_problem: Option<String>,
     pub index_bytes: u64,
     pub text_store_bytes: u64,
     pub last_updated: Option<i64>,
