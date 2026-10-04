@@ -2,6 +2,7 @@
 /target/
 /ui/dist/
 /dist-installers/
+/_site/
 node_modules/
 
 # Tauri-generated schemas (recreated on every build)

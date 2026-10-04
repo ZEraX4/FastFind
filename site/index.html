@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.github.com; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="color-scheme" content="light dark">
+  <title>FastFind — fast, private full-text search for your files</title>
+  <meta name="description" content="FastFind indexes the text inside your documents, PDFs, spreadsheets, presentations and code, and finds anything in milliseconds. Free, open source, and entirely on your computer.">
+  <meta property="og:title" content="FastFind — find any text in any file, instantly">
+  <meta property="og:description" content="Fast, private full-text search for Windows, macOS and Linux. Free and open source.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="img/app-dark.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="./" aria-label="FastFind home"><img src="icon.svg" alt="" width="28" height="28">FastFind</a>
+      <nav aria-label="Main">
+        <a href="#features">Features</a>
+        <a href="#download">Download</a>
+        <a href="demo/?q=invoice">Live demo</a>
+        <a href="https://github.com/ZEraX4/FastFind" class="gh">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="wrap">
+        <h1>Find any text in any file. <span class="accent">Instantly.</span></h1>
+        <p class="lead">FastFind reads the text inside your documents, PDFs, spreadsheets, presentations and code once, then answers every search in milliseconds. It runs entirely on your computer.</p>
+        <div class="cta">
+          <a class="btn primary" id="hero-download" href="https://github.com/ZEraX4/FastFind/releases/latest">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            <span id="hero-label">Download FastFind</span>
+          </a>
+          <a class="btn" href="demo/?q=invoice">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            Try the live demo
+          </a>
+        </div>
+        <p class="meta"><span id="hero-version">Free and open source</span> · Windows, macOS and Linux · <a href="#download">All downloads</a></p>
+      </div>
+      <div class="wrap shot">
+        <picture>
+          <source srcset="img/app-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="img/app-light.png" width="1400" height="600" alt="FastFind showing three results for “invoice”: a PDF invoice, meeting notes and a CSV export, with highlighted snippets and a preview of the PDF.">
+        </picture>
+      </div>
+    </section>
+
+    <section id="features" class="section">
+      <div class="wrap">
+        <h2>Everything you need to find it</h2>
+        <div class="grid">
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+            <h3>Inside every document</h3>
+            <p>Word, Excel, PowerPoint (old and new formats), PDF, OpenDocument, EPUB, RTF, HTML, Markdown, CSV, logs and 150+ kinds of source code.</p>
+          </article>
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>
+            <h3>Milliseconds, not minutes</h3>
+            <p>Most searches finish in under 10&nbsp;ms, even with a million files indexed. Indexing reaches thousands of files per second.</p>
+          </article>
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
+            <h3>Exactly where it is</h3>
+            <p>Highlighted snippets tell you the page, slide, sheet and cell, or line. The preview steps through every match.</p>
+          </article>
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+            <h3>Search the way you think</h3>
+            <p>Phrases, AND / OR / NOT, wildcards and filters by type, folder, date and size. Exact and regular-expression modes too.</p>
+          </article>
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            <h3>Always up to date</h3>
+            <p>New, edited, renamed and deleted files are picked up as they change. Restarting re-reads only what changed.</p>
+          </article>
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            <h3>Private by design</h3>
+            <p>Your files and their contents never leave your computer. No account, no cloud, no telemetry.</p>
+          </article>
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
+            <h3>Scanned documents too</h3>
+            <p>With the free Tesseract OCR installed, FastFind can read scanned PDFs and images, in the languages you choose.</p>
+          </article>
+          <article class="card">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/></svg>
+            <h3>Never gets stuck</h3>
+            <p>Damaged, locked or huge files don't stop indexing. They're listed with the reason, so you know what was skipped.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="wrap split">
+        <div>
+          <h2>A search box that understands you</h2>
+          <p>Type a few words and results appear as you type. When you need more precision, add a filter or switch mode. Press F1 in the app for the full list.</p>
+          <a class="text-link" href="demo/?q=quarterly">Try it in the live demo →</a>
+        </div>
+        <table class="syntax">
+          <caption class="sr-only">Search examples</caption>
+          <tbody>
+            <tr><td><code>"annual report"</code></td><td>exact phrase</td></tr>
+            <tr><td><code>invoice -draft</code></td><td>one word, without another</td></tr>
+            <tr><td><code>(invoice OR receipt) 2026</code></td><td>alternatives, grouped</td></tr>
+            <tr><td><code>budget ext:xlsx</code></td><td>only spreadsheets of that type</td></tr>
+            <tr><td><code>type:presentation modified:7d</code></td><td>slides changed this week</td></tr>
+            <tr><td><code>in:"D:\Projects" size:&gt;10mb</code></td><td>large files in one folder</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="download" class="section">
+      <div class="wrap">
+        <h2>Download</h2>
+        <p class="sub"><span id="dl-version">The latest version</span> is free and open source under the MIT license.</p>
+        <div class="downloads">
+          <article class="dl" data-os="windows">
+            <h3>Windows</h3>
+            <p class="req">Windows 10 or 11, 64-bit</p>
+            <a class="btn primary" data-asset="-setup.exe" href="https://github.com/ZEraX4/FastFind/releases/latest">Installer (.exe)</a>
+            <a class="alt-link" data-asset=".msi" href="https://github.com/ZEraX4/FastFind/releases/latest">MSI package</a>
+          </article>
+          <article class="dl" data-os="macos">
+            <h3>macOS</h3>
+            <p class="req">macOS 11 or later, Apple silicon and Intel</p>
+            <a class="btn primary" data-asset=".dmg" href="https://github.com/ZEraX4/FastFind/releases/latest">Disk image (.dmg)</a>
+          </article>
+          <article class="dl" data-os="linux">
+            <h3>Linux</h3>
+            <p class="req">64-bit, most distributions</p>
+            <a class="btn primary" data-asset=".AppImage" href="https://github.com/ZEraX4/FastFind/releases/latest">AppImage</a>
+            <a class="alt-link" data-asset=".deb" href="https://github.com/ZEraX4/FastFind/releases/latest">Debian / Ubuntu (.deb)</a>
+          </article>
+        </div>
+        <div class="notes">
+          <p><strong>First launch:</strong> the installers aren't code-signed by Microsoft or Apple yet, so your system warns once. On Windows choose <em>More info → Run anyway</em>. On macOS open <em>System Settings → Privacy &amp; Security</em> and click <em>Open Anyway</em>.</p>
+          <p><strong>Updates:</strong> FastFind can check for new versions once a day, but only if you allow it. Every update is verified with FastFind's signing key before it installs.</p>
+          <p><strong>Scanned documents</strong> need <a href="https://github.com/tesseract-ocr/tesseract#installing-tesseract">Tesseract OCR</a>, which is free. Everything else is included.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="wrap privacy">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div>
+          <h2>Your files stay yours</h2>
+          <p>FastFind never uploads your files, their contents or what you search for. There is no account, no analytics and no crash reporting. The index lives in FastFind's folder on your computer. The only network request it can make is the optional update check, which you're asked about first. The source code is <a href="https://github.com/ZEraX4/FastFind">public</a>, so you can check.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>FastFind · MIT license</span>
+      <nav aria-label="Project">
+        <a href="https://github.com/ZEraX4/FastFind">Source code</a>
+        <a href="https://github.com/ZEraX4/FastFind/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/ZEraX4/FastFind/issues">Report a problem</a>
+        <a href="https://github.com/ZEraX4/FastFind/blob/main/SECURITY.md">Security</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

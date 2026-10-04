@@ -8,8 +8,10 @@ async function start() {
     // Inside the desktop app Tauri injects its IPC bridge; in a plain browser (npm run dev)
     // the UI runs against demo data instead.
     const inTauri = "__TAURI_INTERNALS__" in window;
-    const api: Api = inTauri ? await tauriApi() : (await import("./demo")).demoApi();
+    const demo = inTauri ? null : await import("./demo");
+    const api: Api = demo ? demo.demoApi() : await tauriApi();
     await new App(root, api).init();
+    demo?.demoExtras();
   } catch (e) {
     root.textContent = `FastFind failed to start: ${e}`;
   }

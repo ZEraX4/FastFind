@@ -26,6 +26,8 @@ request it ever makes is an optional, opt-in update check.
 * **Robust:** damaged, encrypted, huge or malicious files never stop indexing. They are listed
   under *Skipped files* with the reason.
 
+**Website and live demo:** https://zerax4.github.io/FastFind/
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design, risks and trade-offs.
 
 ---
@@ -244,6 +246,14 @@ release workflow refuses to run until both are configured.
 **OS code signing (optional).** Without it Windows SmartScreen and macOS Gatekeeper warn on first
 launch. Add a Windows code-signing certificate and the `APPLE_*` notarisation secrets to remove
 the warnings.
+
+### Website
+
+`site/` holds the project website. `npm run site:build` assembles it into `_site/` together with
+the in-browser UI demo (`_site/demo/`, sample data only). `.github/workflows/pages.yml` publishes
+it with GitHub Pages on every push to `main` that touches the site or the UI. Enable it once under
+*Settings → Pages → Source: GitHub Actions*. The download buttons read the latest release from
+GitHub's API, so they need no change for new versions.
 
 **Flatpak:** the AppImage/deb cover most distributions. A Flatpak manifest can wrap the
 `deb` payload with the `org.gnome.Platform` runtime (WebKitGTK), but is not included yet.

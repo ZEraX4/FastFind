@@ -1,6 +1,7 @@
 // In-browser demo backend: lets the UI run with `npm run dev` in a normal browser (no Tauri),
 // for UI development and screenshots. Never used inside the desktop app.
 
+import { h } from "./dom";
 import { emptyFilters, type Api, type IndexStatus, type Preview, type ResultItem, type SearchRequest, type SearchResponse, type Settings, type SnippetResult } from "./api";
 
 const now = Math.floor(Date.now() / 1000);
@@ -139,3 +140,32 @@ export function demoApi(): Api {
 }
 
 export const demoFilters = emptyFilters;
+
+/**
+ * Demo-only conveniences (never in the desktop app): `?q=` runs a search on load and `?theme=`
+ * forces light or dark, for links and screenshots. The demo hosted on the website (built with
+ * VITE_SITE_DEMO) also says that it searches sample files.
+ */
+export function demoExtras(): void {
+  const params = new URLSearchParams(location.search);
+  const theme = params.get("theme");
+  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  const q = params.get("q");
+  const input = document.querySelector<HTMLInputElement>(".search-input");
+  if (q && input) {
+    input.value = q;
+    input.dispatchEvent(new Event("input"));
+  }
+  if (import.meta.env.VITE_SITE_DEMO && params.get("notice") !== "0") {
+    const close = h("button", { class: "icon-btn", "aria-label": "Dismiss", title: "Dismiss" }, "×");
+    const note = h(
+      "div",
+      { class: "demo-notice", role: "note" },
+      h("span", {}, h("strong", {}, "Live demo"), " with sample files. Nothing on your computer is searched."),
+      h("a", { href: "../#download" }, "Get FastFind"),
+      close,
+    );
+    close.addEventListener("click", () => note.remove());
+    document.body.appendChild(note);
+  }
+}
