@@ -258,9 +258,11 @@ fn unusable_ocr_setup_keeps_files_queued_until_fixed() {
     let st = e.status().unwrap();
     assert_eq!((st.needs_ocr, st.failed), (1, 0), "the scan waits instead of failing: {st:?}");
 
-    // Fixing the setting lets OCR run.
+    // Fixing the setting lets OCR run. Wait for both the text and the catalog: a commit makes
+    // text searchable before it updates the catalog the status counts come from.
     set("", "eng");
-    assert!(wait_for(Duration::from_secs(120), || !names(&e, "echidna").is_empty()), "status: {:?}", e.status().unwrap());
+    let done = || !names(&e, "echidna").is_empty() && e.status().is_ok_and(|st| st.needs_ocr == 0);
+    assert!(wait_for(Duration::from_secs(120), done), "status: {:?}", e.status().unwrap());
     let st = e.status().unwrap();
     assert_eq!((st.needs_ocr, st.failed, st.ocr_problem), (0, 0, None));
     e.shutdown();
