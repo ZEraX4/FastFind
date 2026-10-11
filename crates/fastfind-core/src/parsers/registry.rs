@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use super::archive::ZipParser;
 use super::doc::DocParser;
 use super::email::EmailParser;
 use super::msg::MsgParser;
@@ -78,7 +79,7 @@ impl ParserRegistry {
         let all: Vec<ParserRef> = vec![
             plain.clone(), html.clone(), xml.clone(), rtf.clone(), pdf.clone(), doc.clone(), xls.clone(),
             ppt.clone(), Arc::new(JsonParser), Arc::new(DocxParser), Arc::new(XlsxParser),
-            Arc::new(PptxParser), Arc::new(OdfParser), Arc::new(EpubParser), Arc::new(EmailParser), Arc::new(MsgParser),
+            Arc::new(PptxParser), Arc::new(OdfParser), Arc::new(EpubParser), Arc::new(EmailParser), Arc::new(MsgParser), Arc::new(ZipParser),
         ];
         let mut by_ext = HashMap::new();
         for p in &all {
@@ -148,7 +149,7 @@ pub fn kind_for_ext(ext: &str) -> Kind {
 /// Extensions that are never text: skipped without even reading their header.
 pub fn is_known_binary(ext: &str) -> bool {
     matches!(ext,
-        "exe" | "dll" | "so" | "dylib" | "o" | "obj" | "a" | "lib" | "bin" | "iso" | "img" | "dmg" | "zip"
+        "exe" | "dll" | "so" | "dylib" | "o" | "obj" | "a" | "lib" | "bin" | "iso" | "img" | "dmg"
         | "7z" | "rar" | "gz" | "tgz" | "bz2" | "xz" | "zst" | "lz4" | "jar" | "war" | "ear" | "class"
         | "pyc" | "pyo" | "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "webp" | "ico"
         | "heic" | "heif" | "psd" | "raw" | "cr2" | "nef" | "dng" | "mp3" | "mp4" | "m4a" | "m4v"

@@ -15,22 +15,15 @@
 
 use std::io::Read;
 use std::path::Path;
-use std::sync::OnceLock;
 
 use mail_parser::{Address, Message, MessageParser, MimeHeaders};
 
+use super::embedded::{begin_part, extract_embedded, MAX_NESTING};
 use super::html::html_to_text;
-use super::registry::ParserRegistry;
-use super::sniff::read_header;
-use super::{DocMeta, DocumentParser, Limits, LocKind, ParseContext, ParseResult, TextMode, TextSink};
-use crate::util::extension_of;
+use super::{DocMeta, DocumentParser, Limits, ParseContext, ParseResult, TextMode, TextSink};
 
 /// Messages larger than this are read only up to here (the tail is usually attachments).
 const MAX_EML_BYTES: u64 = 256 << 20;
-/// Attachments larger than this are not extracted.
-pub(super) const MAX_ATTACHMENT_BYTES: usize = 64 << 20;
-/// Messages attached to messages attached to… are followed this deep.
-pub(super) const MAX_NESTING: usize = 4;
 
 pub struct EmailParser;
 
@@ -123,7 +116,7 @@ fn emit_message(msg: &Message, limits: &Limits, sink: &mut TextSink, depth: usiz
         sink.check_deadline()?;
         let name = part.attachment_name().map(str::to_string).filter(|n| !n.trim().is_empty());
         if let Some(inner) = part.message() {
-            if depth < MAX_NESTING {
+            if limits.container_depth + depth < MAX_NESTING {
                 let label = inner.subject().map(|s| format!("Attached message: {s}")).unwrap_or_else(|| "Attached message".into());
                 begin_part(sink, label);
                 emit_message(inner, limits, sink, depth + 1)?;
@@ -142,70 +135,9 @@ fn emit_message(msg: &Message, limits: &Limits, sink: &mut TextSink, depth: usiz
                 sink.push_str(text);
             }
         } else if let Some(name) = name {
-            extract_attachment(&name, part.contents(), label, limits, sink, depth)?;
+            extract_embedded(&name, part.contents(), label, limits, sink)?;
         }
     }
-    Ok(())
-}
-
-pub(super) fn begin_part(sink: &mut TextSink, label: String) {
-    sink.newline();
-    sink.anchor(LocKind::Part(label));
-}
-
-fn registry() -> &'static ParserRegistry {
-    static REGISTRY: OnceLock<ParserRegistry> = OnceLock::new();
-    REGISTRY.get_or_init(ParserRegistry::new)
-}
-
-/// Run the regular parser for an attached document and append its text and anchors.
-pub(super) fn extract_attachment(name: &str, data: &[u8], label: String, limits: &Limits, sink: &mut TextSink, depth: usize) -> ParseResult<()> {
-    let ext = extension_of(Path::new(name));
-    if ext == "eml" {
-        if depth < MAX_NESTING {
-            if let Some(inner) = MessageParser::default().parse(data) {
-                begin_part(sink, label);
-                emit_message(&inner, limits, sink, depth + 1)?;
-            }
-        }
-        return Ok(());
-    }
-    if data.is_empty() || data.len() > MAX_ATTACHMENT_BYTES || !registry().has_parser_for(&ext) {
-        return Ok(());
-    }
-    // A private folder; the file name is ASCII so every parser and helper process can open it.
-    let dir = tempfile::Builder::new().prefix("fastfind-attachment").tempdir()?;
-    let path = dir.path().join(format!("attachment.{ext}"));
-    std::fs::write(&path, data)?;
-    let header = read_header(&path)?;
-    let Some(resolved) = registry().resolve(&path, &ext, &header, false) else {
-        return Ok(());
-    };
-    let room = limits.max_text_bytes.saturating_sub(sink.len());
-    if room == 0 {
-        return Ok(());
-    }
-    let child_limits = Limits { max_text_bytes: room, ..limits.clone() };
-    let mut child = TextSink::new(room, limits.deadline);
-    match resolved.parser.extract(&path, &ParseContext { limits: &child_limits }, &mut child) {
-        Ok(_) | Err(super::ParseError::Timeout) => {}
-        // A damaged or locked attachment does not fail the message.
-        Err(e) => {
-            tracing::debug!(attachment = %name, error = %e, "attachment not extracted");
-            return Ok(());
-        }
-    }
-    let (text, locs, _) = child.into_parts();
-    if text.trim().is_empty() {
-        return Ok(());
-    }
-    begin_part(sink, label);
-    let base = sink.len() as u32;
-    sink.push_str(&text);
-    for loc in locs {
-        sink.anchor_at(super::Loc { offset: base + loc.offset, kind: loc.kind });
-    }
-    sink.newline();
     Ok(())
 }
 
