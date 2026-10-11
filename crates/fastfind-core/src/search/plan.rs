@@ -13,6 +13,7 @@ use tantivy::query::{
 use tantivy::schema::{Field, IndexRecordOption};
 use tantivy::Term;
 
+use super::names::NameQuery;
 use super::query::{FieldFilter, Node, Range};
 use crate::analysis::{analyze, words};
 use crate::config::SearchSettings;
@@ -53,24 +54,6 @@ fn should(qs: Vec<Q>) -> Q {
         return qs.into_iter().next().unwrap();
     }
     Box::new(BooleanQuery::new(qs.into_iter().map(|q| (Occur::Should, q)).collect()))
-}
-
-/// Glob (`*`, `?`) → anchored regex over the whole term; plain text → substring.
-pub fn name_pattern(value: &str) -> String {
-    let v = value.to_lowercase();
-    if v.contains('*') || v.contains('?') {
-        let mut out = String::new();
-        for c in v.chars() {
-            match c {
-                '*' => out.push_str(".*"),
-                '?' => out.push('.'),
-                c => out.push_str(&regex::escape(&c.to_string())),
-            }
-        }
-        out
-    } else {
-        format!(".*{}.*", regex::escape(&v))
-    }
 }
 
 impl<'a> Planner<'a> {
@@ -167,7 +150,7 @@ impl<'a> Planner<'a> {
     pub fn field(&self, f: &FieldFilter) -> Result<Q> {
         let fl = self.f;
         Ok(match f {
-            FieldFilter::Name(v) => regex_q(fl.name_lc, &name_pattern(v))?,
+            FieldFilter::Name(v) => Box::new(NameQuery::new(v)?),
             FieldFilter::Ext(exts) => should(exts.iter().map(|e| term_q_raw(fl.ext, e)).collect()),
             FieldFilter::Kind(kinds) => should(kinds.iter().map(|k| term_q_raw(fl.kind, k)).collect()),
             FieldFilter::Path(v) => {
@@ -219,7 +202,7 @@ impl<'a> Planner<'a> {
     pub fn filename_query(&self, text: &str) -> Result<Option<Q>> {
         let mut clauses: Vec<(Occur, Q)> = Vec::new();
         for w in text.split_whitespace() {
-            clauses.push((Occur::Must, regex_q(self.f.name_lc, &name_pattern(w))?));
+            clauses.push((Occur::Must, Box::new(NameQuery::new(w)?)));
             for t in analyze(w.trim_matches(|c| c == '*' || c == '?')) {
                 clauses.push((Occur::Should, term_q(self.f.name, &t)));
             }
@@ -246,7 +229,7 @@ impl<'a> Planner<'a> {
             return None;
         }
         let longest = lits.iter().max_by_key(|l| l.chars().filter(|c| c.is_alphanumeric()).count())?;
-        let name = regex_q(self.f.name_lc, &format!(".*{}.*", regex::escape(&longest.to_lowercase()))).ok()?;
+        let name: Q = Box::new(NameQuery::new(&longest.replace(['*', '?'], "")).ok()?);
         Some(Box::new(BooleanQuery::new(vec![
             (Occur::Should, Box::new(BooleanQuery::new(content)) as Q),
             (Occur::Should, name),
@@ -376,12 +359,5 @@ mod tests {
         assert_eq!(longest_required_literal("foo|bar"), None);
         assert_eq!(longest_required_literal("[a-z]+"), None);
         assert_eq!(longest_required_literal("(abc)+x?"), Some("abc".into()));
-    }
-
-    #[test]
-    fn globs() {
-        assert_eq!(name_pattern("*.PDF"), r".*\.pdf");
-        assert_eq!(name_pattern("report"), ".*report.*");
-        assert_eq!(name_pattern("a?c"), "a.c");
     }
 }

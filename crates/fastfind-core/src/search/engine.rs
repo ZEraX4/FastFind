@@ -304,6 +304,7 @@ impl SearchService {
     pub fn search(&self, req: &SearchRequest, s: &SearchSettings, cancel: &CancelToken) -> Result<SearchResponse> {
         let t0 = Instant::now();
         let searcher = self.store.searcher();
+        super::names::prune(&searcher);
         let generation = searcher.generation().generation_id();
         let key = PageKey { req: req.clone(), generation };
         if let Some(mut hit) = self.pages.lock().get(&key).cloned() {
