@@ -28,9 +28,9 @@ use crate::util::extension_of;
 /// Messages larger than this are read only up to here (the tail is usually attachments).
 const MAX_EML_BYTES: u64 = 256 << 20;
 /// Attachments larger than this are not extracted.
-const MAX_ATTACHMENT_BYTES: usize = 64 << 20;
+pub(super) const MAX_ATTACHMENT_BYTES: usize = 64 << 20;
 /// Messages attached to messages attached to… are followed this deep.
-const MAX_NESTING: usize = 4;
+pub(super) const MAX_NESTING: usize = 4;
 
 pub struct EmailParser;
 
@@ -148,7 +148,7 @@ fn emit_message(msg: &Message, limits: &Limits, sink: &mut TextSink, depth: usiz
     Ok(())
 }
 
-fn begin_part(sink: &mut TextSink, label: String) {
+pub(super) fn begin_part(sink: &mut TextSink, label: String) {
     sink.newline();
     sink.anchor(LocKind::Part(label));
 }
@@ -159,7 +159,7 @@ fn registry() -> &'static ParserRegistry {
 }
 
 /// Run the regular parser for an attached document and append its text and anchors.
-fn extract_attachment(name: &str, data: &[u8], label: String, limits: &Limits, sink: &mut TextSink, depth: usize) -> ParseResult<()> {
+pub(super) fn extract_attachment(name: &str, data: &[u8], label: String, limits: &Limits, sink: &mut TextSink, depth: usize) -> ParseResult<()> {
     let ext = extension_of(Path::new(name));
     if ext == "eml" {
         if depth < MAX_NESTING {

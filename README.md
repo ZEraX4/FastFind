@@ -11,8 +11,8 @@ request it ever makes is an optional, opt-in update check.
 
 * **Formats:** TXT, Markdown, CSV/TSV, logs, 150+ source/config types, HTML, XML, JSON, RTF,
   **DOC, DOCX, XLS, XLSX, PPT, PPTX**, ODT/ODS/ODP, EPUB, **PDF** (via PDFium) and e-mail
-  (**EML**, including attachments). Scanned PDFs are detected and can be OCR'd with a local
-  Tesseract.
+  (**EML** and Outlook **MSG**, including attachments). Scanned PDFs, and scanned pages inside
+  typed PDFs, are detected and can be OCR'd with a local Tesseract.
 * **Languages:** accents are ignored (`Café` = `cafe`, `Geçiş` = `gecis`), and Arabic is
   normalized: `أ إ آ` = `ا`, `ة` = `ه`, `ى` = `ي`, tatweel and harakat are ignored, Arabic-Indic
   digits match `0-9`, and `مدرسة` finds `المدرسة`.
@@ -128,13 +128,15 @@ npm test
   re-indexing, the live file watcher, corrupted-index recovery, zip bombs, and malformed or
   deeply nested files.
 * **Fixture tests** (`tests/fixtures.rs`) use real `.doc/.docx/.xls/.xlsx/.ppt/.pptx` files
-  saved by Microsoft Office, including password-protected ones.
+  saved by Microsoft Office, including password-protected ones, and `.msg` messages saved by
+  Outlook (with attachments).
 * **PDF tests** (`tests/pdf.rs`) cover a Word-exported PDF (pages, metadata), 40-page
-  documents and scanned-PDF classification.
+  documents and scanned-page classification.
 * **OCR tests** (`tests/ocr.rs`, need a local Tesseract; skipped otherwise) use genuine scans:
   text rendered to pixels with PDFium and wrapped in image-only PDFs and PNGs. They cover
-  Tesseract recognising a page, a two-page scanned PDF keeping its page numbers, and the full
-  flow from "Scanned PDF requiring OCR" to searchable once OCR is enabled in Settings,
+  Tesseract recognising a page, a two-page scanned PDF keeping its page numbers, a typed PDF
+  with one scanned page (only that page is recognised), and the full flow from "Scanned pages,
+  OCR needed" to searchable once OCR is enabled in Settings,
   including existing images and an unreadable image that must not block the queue.
 * **OCR tests** (`tests/ocr.rs`) also cover setup problems: Tesseract missing, a wrong
   executable, languages that are not installed, and that queued scans wait instead of failing.

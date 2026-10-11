@@ -91,6 +91,13 @@ impl Engine {
         }
         let pdf = crate::parsers::pdf::init(&opts.pdfium_dirs);
         let (catalog, cat_new) = Catalog::open(&paths.catalog_db, &paths.quarantine_dir)?;
+        // Since 1.3.0 a single scanned page queues a PDF for OCR; PDFs indexed before are
+        // re-read once by the startup scan to find them.
+        match catalog.recheck_pdfs_for_scanned_pages() {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(files = n, "re-checking indexed PDFs for scanned pages"),
+            Err(e) => tracing::warn!(error = %e, "could not mark PDFs for a scanned-page check"),
+        }
         if settings.indexing.ocr.enabled {
             // Up to 1.1.0 Tesseract was given file paths, which it cannot open on Windows when
             // they contain characters outside the legacy code page. Those files failed with

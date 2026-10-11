@@ -307,39 +307,55 @@ pub fn write_pdf(path: &Path, title: &str, pages: &[Vec<String>]) -> io::Result<
 pub fn write_image_pdf(path: &Path, pages: usize) -> io::Result<()> {
     let (w, h) = (64u32, 64u32);
     let pixels: Vec<u8> = (0..(w * h) as usize).map(|i| if (i / w as usize + i % w as usize) % 8 < 4 { 0 } else { 255 }).collect();
-    let page = ScanPage { width: w, height: h, gray: &pixels };
+    let page = ScanPage { width: w, height: h, gray: &pixels, text: &[] };
     write_scanned_pdf(path, &vec![page; pages])
 }
 
-/// One page image for [`write_scanned_pdf`]: 8-bit greyscale, row-major.
+/// One page for [`write_scanned_pdf`]: a full-page image (8-bit greyscale, row-major; none
+/// when `gray` is empty) and optional text lines drawn over it.
 #[derive(Clone, Copy)]
 pub struct ScanPage<'a> {
     pub width: u32,
     pub height: u32,
     pub gray: &'a [u8],
+    pub text: &'a [&'a str],
 }
 
 /// A scanned-document PDF: each page is one full-page greyscale image (Flate-compressed) and
-/// there is no text layer — exactly what a document scanner produces.
+/// there is no text layer — exactly what a document scanner produces. Pages with `text` get
+/// a text layer too, so mixed documents (typed pages plus scanned ones) can be built.
 pub fn write_scanned_pdf(path: &Path, pages: &[ScanPage]) -> io::Result<()> {
     let mut objs: Vec<Vec<u8>> = Vec::new();
     objs.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
     let n = pages.len();
-    // Objects: 1 catalog, 2 pages, then per page: image, page, content.
-    let kids: String = (0..n).map(|i| format!("{} 0 R ", 4 + i * 3)).collect();
+    // Objects: 1 catalog, 2 pages, 3 font, then per page: image, page, content.
+    let kids: String = (0..n).map(|i| format!("{} 0 R ", 5 + i * 3)).collect();
     objs.push(format!("<< /Type /Pages /Kids [{kids}] /Count {n} >>").into_bytes());
+    objs.push(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_vec());
     for (i, p) in pages.iter().enumerate() {
-        let mut z = flate2_compress(p.gray)?;
+        // A page without an image still gets an (unused) 1x1 image object, keeping the numbering.
+        let (w, h, gray) = if p.gray.is_empty() { (1, 1, &[255u8][..]) } else { (p.width, p.height, p.gray) };
+        let mut z = flate2_compress(gray)?;
         let mut img = format!(
             "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n",
-            p.width, p.height, z.len()
+            w, h, z.len()
         )
         .into_bytes();
         img.append(&mut z);
         img.extend_from_slice(b"\nendstream");
         objs.push(img);
-        let content = "q 595 0 0 842 0 0 cm /Im1 Do Q";
-        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im1 {} 0 R >> >> /Contents {} 0 R >>", 3 + i * 3, 5 + i * 3).into_bytes());
+        let mut content = String::new();
+        if !p.gray.is_empty() {
+            content.push_str("q 595 0 0 842 0 0 cm /Im1 Do Q\n");
+        }
+        if !p.text.is_empty() {
+            content.push_str("BT /F1 11 Tf 14 TL 50 800 Td\n");
+            for l in p.text {
+                content.push_str(&format!("({}) Tj T*\n", pdf_escape(l)));
+            }
+            content.push_str("ET");
+        }
+        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> /XObject << /Im1 {} 0 R >> >> /Contents {} 0 R >>", 4 + i * 3, 6 + i * 3).into_bytes());
         objs.push(format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()).into_bytes());
     }
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec();

@@ -9,9 +9,9 @@
 //! Fallback engine: the pure-Rust `pdf-extract` crate, used only when the PDFium library cannot
 //! be loaded (e.g. a development build without the bundled binary).
 //!
-//! Classification: pages with (almost) no text but with image objects count as scanned; a
-//! document where at least half the pages are scanned is flagged `NEEDS_OCR` ("Scanned PDF
-//! requiring OCR") as opposed to a text-searchable PDF.
+//! Classification: a page mostly covered by images, with little text, is a scan. A document
+//! with any scanned page is flagged `NEEDS_OCR`; OCR then recognises only those pages and
+//! keeps the text layer of the others (`pages_for_ocr`).
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -153,7 +153,6 @@ fn extract_pdfium(pdfium: &Pdfium, path: &Path, ctx: &ParseContext, sink: &mut T
     let count = pages.len() as u32;
     meta.pages = Some(count);
     let mut scanned = 0u32;
-    let mut text_chars = 0usize;
     let mut processed = 0u32;
     for (i, page) in pages.iter().enumerate() {
         if i as u32 >= ctx.limits.max_pdf_pages || sink.is_full() {
@@ -163,21 +162,74 @@ fn extract_pdfium(pdfium: &Pdfium, path: &Path, ctx: &ParseContext, sink: &mut T
         processed += 1;
         sink.newline();
         sink.anchor(LocKind::Page(i as u32 + 1));
-        let text = page.text().map(|t| t.all()).unwrap_or_default();
-        let meaningful = text.chars().filter(|c| c.is_alphanumeric()).count();
-        text_chars += meaningful;
-        if meaningful < 16 && page.objects().iter().any(|o| o.object_type() == PdfPageObjectType::Image) {
-            scanned += 1;
-        }
+        let (text, is_scan) = read_page(&page);
+        scanned += is_scan as u32;
         sink.push_str(&text);
     }
     if processed < count {
         tracing::debug!(path = %path.display(), processed, count, "PDF truncated at page limit");
     }
-    if processed > 0 && scanned * 2 >= processed && text_chars / (processed as usize) < 64 {
+    // One scanned page is enough: OCR then recognises just the scanned pages.
+    if scanned > 0 {
         meta.flags |= flags::NEEDS_OCR;
     }
     Ok(meta)
+}
+
+/// A page is a scan when images cover at least half of it and it has little real text: fewer
+/// than this many letters and digits (a stamp, a header line, a page number).
+const SCAN_MAX_CHARS: usize = 64;
+const SCAN_MIN_IMAGE_COVER: f32 = 0.5;
+
+/// The page's text layer, and whether the page is a scan that needs OCR.
+fn read_page(page: &PdfPage) -> (String, bool) {
+    let text = page.text().map(|t| t.all()).unwrap_or_default();
+    if text.chars().filter(|c| c.is_alphanumeric()).take(SCAN_MAX_CHARS).count() >= SCAN_MAX_CHARS {
+        return (text, false);
+    }
+    let area = page.width().value * page.height().value;
+    let mut images = 0.0f32;
+    for o in page.objects().iter().filter(|o| o.object_type() == PdfPageObjectType::Image) {
+        // An image whose size can't be read counts as covering the page.
+        images += match (o.width(), o.height()) {
+            (Ok(w), Ok(h)) => w.value * h.value,
+            _ => area,
+        };
+    }
+    (text, area > 0.0 && images >= area * SCAN_MIN_IMAGE_COVER)
+}
+
+/// A page as OCR sees it.
+pub enum OcrPage {
+    /// A page with a usable text layer, which is kept.
+    Text(String),
+    /// A scanned page, rendered for recognition, with whatever little text layer it has.
+    Scan { text: String, image: image::DynamicImage },
+}
+
+/// Walk a PDF for OCR: pages with a usable text layer are passed as text, scanned pages are
+/// rendered `width` pixels wide. Calls `f(page_number, page)`; stops when it returns false.
+pub fn pages_for_ocr(path: &Path, max_pages: u32, width: i32, mut f: impl FnMut(u32, OcrPage) -> bool) -> ParseResult<u32> {
+    let pdfium = engine().pdfium().ok_or_else(|| ParseError::Unsupported("OCR of PDFs requires PDFium".into()))?;
+    let doc = pdfium.load_pdf_from_file(path, None).map_err(map_err)?;
+    let cfg = PdfRenderConfig::new().set_target_width(width).set_maximum_height(width * 2);
+    let mut n = 0;
+    for (i, page) in doc.pages().iter().enumerate() {
+        if i as u32 >= max_pages {
+            break;
+        }
+        let (text, is_scan) = read_page(&page);
+        let item = if is_scan {
+            OcrPage::Scan { text, image: page.render_with_config(&cfg).and_then(|b| b.as_image()).map_err(map_err)? }
+        } else {
+            OcrPage::Text(text)
+        };
+        n += 1;
+        if !f(i as u32 + 1, item) {
+            break;
+        }
+    }
+    Ok(n)
 }
 
 fn extract_fallback(path: &Path, sink: &mut TextSink) -> ParseResult<DocMeta> {

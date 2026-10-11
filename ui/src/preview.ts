@@ -92,7 +92,7 @@ export class PreviewPane {
     const meta: string[] = [bytes(size), `Modified ${dateTime(modified)}`];
     if (pages) meta.push(kind === "presentation" ? `${pages} slides` : kind === "spreadsheet" ? `${pages} sheets` : `${pages} pages`);
     const isPdf = kind === "pdf";
-    const pdfKind = isPdf ? (flags & Flags.NEEDS_OCR ? "Scanned PDF requiring OCR" : flags & Flags.OCR ? "Scanned PDF (OCR text)" : "Text searchable PDF") : null;
+    const pdfKind = isPdf ? (flags & Flags.NEEDS_OCR ? "Scanned pages, OCR needed" : flags & Flags.OCR ? "Includes OCR text" : "Text searchable PDF") : null;
     append(
       this.header,
       h("div", { class: "pv-title-row" }, h("span", { class: `badge ${badge.cls}`, "aria-hidden": "true" }, badge.label), h("h2", { class: "pv-name", title: name }, name)),

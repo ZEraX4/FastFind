@@ -55,7 +55,7 @@ fn scan_pages(dir: &Path, pages: &[&[&str]]) -> Vec<image::GrayImage> {
 }
 
 fn write_scan(path: &Path, imgs: &[image::GrayImage]) {
-    let pages: Vec<ScanPage> = imgs.iter().map(|i| ScanPage { width: i.width(), height: i.height(), gray: i.as_raw() }).collect();
+    let pages: Vec<ScanPage> = imgs.iter().map(|i| ScanPage { width: i.width(), height: i.height(), gray: i.as_raw(), text: &[] }).collect();
     write_scanned_pdf(path, &pages).unwrap();
 }
 
@@ -93,11 +93,42 @@ fn scanned_pdf_is_recognised_page_by_page() {
 
     let mut sink = TextSink::new(1 << 20, None);
     let pages = ocr::ocr_pdf(&tess, &scan, "eng", &mut sink, &|| false).expect("OCR succeeds");
-    assert_eq!(pages, 2);
+    assert_eq!(pages, (2, 2), "two pages, both recognised");
     let (text, locs, _) = sink.into_parts();
     assert!(contains_word(&text, "platypus"), "{text:?}");
     let k = text.to_lowercase().find("kangaroo").unwrap_or_else(|| panic!("kangaroo not recognised: {text:?}"));
     assert_eq!(describe(&locs, &text, k, false).as_deref(), Some("Page 2"), "matches keep their page number");
+}
+
+#[test]
+fn only_the_scanned_pages_of_a_mixed_pdf_are_recognised() {
+    let Some(tess) = tools() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let scanned = scan_pages(dir.path(), &[&["The signed annex lists the wombat enclosure."]]);
+    let typed = ["This typed page is about the harbour budget for the coming year.", "It has plenty of real text, so it keeps its text layer."];
+    let pdf_path = dir.path().join("contract.pdf");
+    let pages = [
+        ScanPage { width: 1, height: 1, gray: &[], text: &typed },
+        // A scanned page with a small stamp in its text layer.
+        ScanPage { width: scanned[0].width(), height: scanned[0].height(), gray: scanned[0].as_raw(), text: &["Received"] },
+        ScanPage { width: 1, height: 1, gray: &[], text: &["Closing page: the lighthouse appendix follows on the next pages of this document."] },
+    ];
+    write_scanned_pdf(&pdf_path, &pages).unwrap();
+
+    let limits = fastfind_core::parsers::Limits::default();
+    let mut sink = TextSink::new(1 << 20, None);
+    let meta = fastfind_core::parsers::DocumentParser::extract(&pdf::PdfParser, &pdf_path, &fastfind_core::parsers::ParseContext { limits: &limits }, &mut sink).unwrap();
+    assert!(sink.text().contains("harbour budget"), "text pages are indexed before OCR");
+    assert_ne!(meta.flags & flags::NEEDS_OCR, 0, "one scanned page is enough to queue the PDF for OCR");
+
+    let mut sink = TextSink::new(1 << 20, None);
+    assert_eq!(ocr::ocr_pdf(&tess, &pdf_path, "eng", &mut sink, &|| false).unwrap(), (3, 1), "only page 2 is recognised");
+    let (text, locs, _) = sink.into_parts();
+    assert!(text.contains(typed[0]), "typed pages keep their exact text: {text:?}");
+    assert!(text.contains("lighthouse appendix"));
+    assert!(text.contains("Received"), "the scanned page's stamp is kept");
+    let w = text.to_lowercase().find("wombat").unwrap_or_else(|| panic!("wombat not recognised: {text:?}"));
+    assert_eq!(describe(&locs, &text, w, false).as_deref(), Some("Page 2"));
 }
 
 fn wait_for(timeout: Duration, mut f: impl FnMut() -> bool) -> bool {

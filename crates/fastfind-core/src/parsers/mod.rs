@@ -12,6 +12,7 @@ pub mod epub;
 pub mod html;
 pub mod json;
 pub mod locmap;
+pub mod msg;
 pub mod odf;
 pub mod ooxml;
 pub mod pdf;

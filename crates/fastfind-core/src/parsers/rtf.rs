@@ -248,7 +248,7 @@ fn emit(sink: &mut TextSink, meta_buf: &mut String, g: &Group, s: &str) {
     }
 }
 
-fn codepage(cp: i64) -> Option<&'static Encoding> {
+pub(crate) fn codepage(cp: i64) -> Option<&'static Encoding> {
     let label = match cp {
         65001 => "utf-8".to_string(),
         932 => "shift_jis".into(),
