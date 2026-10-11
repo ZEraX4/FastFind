@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+* **Outlook messages.** `.msg` files saved from Outlook are searchable like `.eml`: sender,
+  recipients, date and subject, the body (plain text, HTML or Outlook's compressed RTF), and
+  attachments, including attached Outlook items. Results say where: *Attachment: report.pdf*.
+* **Scanned pages in typed PDFs.** A PDF used to go to OCR only when at least half its pages
+  were scanned, so a typed contract with a scanned signature page or appendix never had those
+  pages read. Now any scanned page queues the PDF, and OCR recognises only the scanned pages;
+  typed pages keep their exact text. After updating, PDFs indexed earlier are re-read once in
+  the background to find their scanned pages.
 * **Fixed:** in large text files (logs, CSV, code), an Exact or Regex match, or a phrase, that
   ran across the boundary between two 256 KB pieces of the file was missed. Pieces now
   overlap, and a match is counted once.

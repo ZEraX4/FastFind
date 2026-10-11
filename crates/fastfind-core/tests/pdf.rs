@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use fastfind_core::gen::{write_image_pdf, write_pdf};
+use fastfind_core::gen::{write_image_pdf, write_pdf, write_scanned_pdf, ScanPage};
 use fastfind_core::model::flags;
 use fastfind_core::parsers::locmap::describe;
 use fastfind_core::parsers::pdf::{self, PdfParser};
@@ -62,6 +62,29 @@ fn scanned_pdf_is_classified_as_needing_ocr() {
     let (text, _, meta) = extract(&p);
     assert!(text.trim().is_empty());
     assert_ne!(meta.flags & flags::NEEDS_OCR, 0, "image-only PDF must be flagged for OCR");
+}
+
+#[test]
+fn one_scanned_page_queues_the_pdf_for_ocr_but_a_background_image_does_not() {
+    if !has_pdfium() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let typed = ["Quarterly report for the harbour authority, with figures for every month.", "More typed text follows here."];
+    let gray = vec![128u8; 64 * 64];
+    let text_page = ScanPage { width: 1, height: 1, gray: &[], text: &typed };
+    let scan_page = ScanPage { width: 64, height: 64, gray: &gray, text: &[] };
+
+    let mixed = dir.path().join("mixed.pdf");
+    write_scanned_pdf(&mixed, &[text_page, scan_page]).unwrap();
+    let (text, _, meta) = extract(&mixed);
+    assert!(text.contains("harbour authority"));
+    assert_ne!(meta.flags & flags::NEEDS_OCR, 0, "one scanned page among typed ones");
+
+    // Typed text over a full-page background image (letterhead, watermark) is not a scan.
+    let background = dir.path().join("background.pdf");
+    write_scanned_pdf(&background, &[ScanPage { text: &typed, ..scan_page }]).unwrap();
+    assert_eq!(extract(&background).2.flags & flags::NEEDS_OCR, 0);
 }
 
 #[test]

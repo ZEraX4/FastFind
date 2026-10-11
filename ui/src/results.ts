@@ -154,7 +154,7 @@ export class ResultsList {
     const sn = this.snippets.get(it.path);
     const badge = kindBadge(it.kind, it.ext);
     const tags: HTMLElement[] = [];
-    if (it.flags & Flags.NEEDS_OCR) tags.push(h("span", { class: "tag warn", title: "Scanned document — OCR required to search its content" }, "Scanned · OCR needed"));
+    if (it.flags & Flags.NEEDS_OCR) tags.push(h("span", { class: "tag warn", title: "Scanned pages — OCR is required to search them" }, "Scanned · OCR needed"));
     if (it.flags & Flags.ENCRYPTED) tags.push(h("span", { class: "tag warn", title: "Password protected — only the file name is indexed" }, "Locked"));
     if (it.flags & Flags.FAILED) tags.push(h("span", { class: "tag warn", title: "Content could not be read — only the file name is indexed" }, "Unreadable"));
     if (it.flags & Flags.OCR) tags.push(h("span", { class: "tag", title: "Text recognised by OCR" }, "OCR"));

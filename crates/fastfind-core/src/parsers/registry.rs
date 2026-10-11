@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::doc::DocParser;
 use super::email::EmailParser;
+use super::msg::MsgParser;
 use super::epub::EpubParser;
 use super::html::HtmlParser;
 use super::json::JsonParser;
@@ -77,7 +78,7 @@ impl ParserRegistry {
         let all: Vec<ParserRef> = vec![
             plain.clone(), html.clone(), xml.clone(), rtf.clone(), pdf.clone(), doc.clone(), xls.clone(),
             ppt.clone(), Arc::new(JsonParser), Arc::new(DocxParser), Arc::new(XlsxParser),
-            Arc::new(PptxParser), Arc::new(OdfParser), Arc::new(EpubParser), Arc::new(EmailParser),
+            Arc::new(PptxParser), Arc::new(OdfParser), Arc::new(EpubParser), Arc::new(EmailParser), Arc::new(MsgParser),
         ];
         let mut by_ext = HashMap::new();
         for p in &all {
@@ -138,7 +139,7 @@ pub fn kind_for_ext(ext: &str) -> Kind {
         "json" | "jsonl" | "ndjson" | "geojson" | "har" | "xml" | "xsd" | "xsl" | "xslt" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf" | "config" | "properties" | "plist" | "rss" | "atom" | "kml" | "gpx" | "svg" | "sql" | "env" | "reg" => Kind::Data,
         "epub" | "fb2" | "mobi" | "azw" | "azw3" => Kind::Ebook,
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "webp" | "heic" | "heif" | "ico" | "psd" | "raw" | "cr2" | "nef" | "dng" => Kind::Image,
-        "txt" | "text" | "md" | "markdown" | "mdown" | "rst" | "adoc" | "asciidoc" | "org" | "tex" | "bib" | "log" | "nfo" | "srt" | "vtt" | "eml" | "mbox" | "vcf" | "ics" => Kind::Text,
+        "txt" | "text" | "md" | "markdown" | "mdown" | "rst" | "adoc" | "asciidoc" | "org" | "tex" | "bib" | "log" | "nfo" | "srt" | "vtt" | "eml" | "msg" | "mbox" | "vcf" | "ics" => Kind::Text,
         e if super::plain::PLAIN_EXTENSIONS.contains(&e) => Kind::Code,
         _ => Kind::Other,
     }
@@ -156,7 +157,7 @@ pub fn is_known_binary(ext: &str) -> bool {
         | "pst" | "ost" | "msi" | "msix" | "cab" | "apk" | "ipa" | "deb" | "rpm" | "vmdk" | "vhd"
         | "vhdx" | "qcow2" | "vdi" | "pdb" | "idb" | "ilk" | "blend" | "fbx" | "3ds" | "dwg" | "dxf"
         | "sys" | "drv" | "efi" | "wasm" | "node" | "pak" | "dat" | "idx" | "lock" | "swp" | "tmp"
-        | "xlsb" | "one" | "msg" | "mobi" | "azw" | "azw3" | "numbers" | "pages" | "key"
+        | "xlsb" | "one" | "mobi" | "azw" | "azw3" | "numbers" | "pages" | "key"
     )
 }
 

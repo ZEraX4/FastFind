@@ -18,6 +18,7 @@ use crate::index::service::{base_doc, Inner, Processed, TextAction};
 use crate::index::textstore;
 use crate::index::{FileRecord, IndexService};
 use crate::model::flags;
+use crate::parsers::pdf::OcrPage;
 use crate::parsers::registry::kind_for_ext;
 use crate::parsers::{LocKind, TextMode, TextSink};
 use crate::util::{extension_of, lower_thread_priority};
@@ -243,32 +244,45 @@ pub fn probe(settings: &crate::config::OcrSettings) -> OcrSetup {
     setup
 }
 
-/// OCR a scanned PDF page by page into `sink` (with page anchors). `stop` is polled before
-/// each page; when it fires the result is `Interrupted`, never a partial document.
-pub fn ocr_pdf(tesseract: &Path, pdf: &Path, languages: &str, sink: &mut TextSink, stop: &dyn Fn() -> bool) -> Result<u32, OcrError> {
+/// OCR the scanned pages of a PDF into `sink` (with page anchors); pages with a usable text
+/// layer keep it. Returns (pages, pages recognised). `stop` is polled before each page; when
+/// it fires the result is `Interrupted`, never a partial document.
+pub fn ocr_pdf(tesseract: &Path, pdf: &Path, languages: &str, sink: &mut TextSink, stop: &dyn Fn() -> bool) -> Result<(u32, u32), OcrError> {
     let mut err = None;
     let mut stopped = false;
-    let pages = crate::parsers::pdf::render_pages(pdf, MAX_OCR_PAGES, RENDER_WIDTH, |n, img| {
+    let mut recognised = 0;
+    let pages = crate::parsers::pdf::pages_for_ocr(pdf, MAX_OCR_PAGES, RENDER_WIDTH, |n, page| {
         if stop() {
             stopped = true;
             return false;
         }
-        // Encoded in memory and passed on stdin: no temporary files, whose path (e.g. a temp
-        // folder under a non-ASCII user name) Tesseract might not be able to open.
-        let mut png = Vec::new();
-        if let Err(e) = img.to_luma8().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png) {
-            err = Some(OcrError::File(e.to_string()));
-            return false;
-        }
-        match ocr_image_data(tesseract, png, languages) {
-            Ok(text) => {
-                sink.newline();
-                sink.anchor(LocKind::Page(n));
-                sink.push_str(&text);
-            }
-            Err(e) => {
-                err = Some(e);
-                return false;
+        sink.newline();
+        sink.anchor(LocKind::Page(n));
+        match page {
+            OcrPage::Text(text) => sink.push_str(&text),
+            OcrPage::Scan { text, image: picture } => {
+                // Encoded in memory and passed on stdin: no temporary files, whose path (e.g. a
+                // temp folder under a non-ASCII user name) Tesseract might not be able to open.
+                let mut png = Vec::new();
+                if let Err(e) = picture.to_luma8().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png) {
+                    err = Some(OcrError::File(e.to_string()));
+                    return false;
+                }
+                match ocr_image_data(tesseract, png, languages) {
+                    Ok(ocr) => {
+                        // A stamp or header line in the text layer stays searchable too.
+                        if !text.trim().is_empty() {
+                            sink.push_str(&text);
+                            sink.newline();
+                        }
+                        sink.push_str(&ocr);
+                        recognised += 1;
+                    }
+                    Err(e) => {
+                        err = Some(e);
+                        return false;
+                    }
+                }
             }
         }
         !sink.is_full()
@@ -280,8 +294,8 @@ pub fn ocr_pdf(tesseract: &Path, pdf: &Path, languages: &str, sink: &mut TextSin
     match err {
         // A setup problem always wins: the remaining pages were not attempted.
         Some(e @ OcrError::Setup(_)) => Err(e),
-        Some(e) if sink.is_empty() => Err(e),
-        _ => Ok(pages),
+        Some(e) if recognised == 0 => Err(e),
+        _ => Ok((pages, recognised)),
     }
 }
 
@@ -361,18 +375,20 @@ fn ocr_file(inner: &Inner, tesseract: &Path, languages: &str, row: &FileRow, sto
     let kind = kind_for_ext(&ext);
     let mut sink = TextSink::new((max_mb as usize) << 20, None);
     let stop = || inner.is_shutdown() || inner.busy();
+    // (pages, whether text was recognised)
     let result = if ext == "pdf" {
-        ocr_pdf(tesseract, &path, languages, &mut sink, &stop).map(Some)
+        ocr_pdf(tesseract, &path, languages, &mut sink, &stop).map(|(pages, recognised)| (Some(pages), recognised > 0))
     } else {
         ocr_image(tesseract, &path, languages).map(|t| {
             sink.push_str(&t);
-            None
+            (None, true)
         })
     };
     let f = &inner.store.fields;
+    let ocr = |recognised: bool| if recognised { flags::OCR } else { 0 };
     let (status, reason, fl, pages) = match result {
-        Ok(pages) if !sink.is_empty() => (Status::Indexed, None, (row.flags & !flags::NEEDS_OCR & !flags::NAME_ONLY) | flags::OCR, pages),
-        Ok(pages) => (Status::Indexed, Some("OCR found no text".into()), (row.flags & !flags::NEEDS_OCR) | flags::OCR, pages),
+        Ok((pages, recognised)) if !sink.is_empty() => (Status::Indexed, None, (row.flags & !flags::NEEDS_OCR & !flags::NAME_ONLY) | ocr(recognised), pages),
+        Ok((pages, recognised)) => (Status::Indexed, Some("OCR found no text".into()), (row.flags & !flags::NEEDS_OCR) | ocr(recognised), pages),
         Err(OcrError::File(e)) => (Status::Failed, Some(format!("OCR failed: {e}")), row.flags & !flags::NEEDS_OCR, None),
         Err(e) => return Err(e),
     };

@@ -77,7 +77,7 @@ pub fn build(p: &mut Preview, source: &TextSource, hl: &dyn Highlighter) {
 pub fn flag_notes(p: &mut Preview) {
     let f = p.flags;
     if f & flags::NEEDS_OCR != 0 {
-        p.notes.push("Scanned document without a text layer — OCR is required to search its content (enable OCR in Settings → Indexing).".into());
+        p.notes.push("Has scanned pages without a text layer — OCR is required to search them (enable OCR in Settings → Indexing).".into());
     }
     if f & flags::OCR != 0 {
         p.notes.push("Text recognised with OCR; it may contain recognition errors.".into());

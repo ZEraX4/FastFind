@@ -100,7 +100,7 @@ export function demoApi(): Api {
         path, name: d.name, kind: d.kind, size: d.size, modified: d.modified, flags: d.flags, pages: d.pages,
         title: d.kind === "word" ? "Q3 Board Report" : null, author: d.kind === "word" ? "Dana Lee" : null,
         totalMatches: n, matchesCapped: false, sections, head: d.body ? null : null,
-        notes: d.flags & 2 ? ["Scanned document without a text layer — OCR is required to search its content (enable OCR in Settings → Indexing)."] : [],
+        notes: d.flags & 2 ? ["Has scanned pages without a text layer — OCR is required to search them (enable OCR in Settings → Indexing)."] : [],
       };
     },
     async status(): Promise<IndexStatus> {

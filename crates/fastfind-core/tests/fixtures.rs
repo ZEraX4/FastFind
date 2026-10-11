@@ -112,3 +112,32 @@ fn password_protected_files_are_reported_as_encrypted() {
         }
     }
 }
+
+#[test]
+fn outlook_unicode_msg() {
+    let o = extract("outlook-unicode.msg").unwrap();
+    assert_eq!(o.parser, "msg");
+    assert_eq!(o.title.as_deref(), Some("Geçiş izni — تقرير الميزانية"));
+    for w in [
+        "Subject: Geçiş izni — تقرير الميزانية",
+        "Ayşe Yılmaz <ayse@example.com>",
+        "Cc: team@example.com",
+        "Geçiş izni onaylandı. zanzibarquota is the code word.",
+        "الميزانية معتمدة للمدرسة",
+    ] {
+        assert!(o.text.contains(w), "{w}: {}", o.text);
+    }
+    // Attachments: a Word document, a text file and an attached Outlook item.
+    assert_eq!(location_of(&o, "marmalade factory").as_deref(), Some("≈ Page 1 · Attachment: modern.docx"));
+    assert_eq!(location_of(&o, "kestrelword").as_deref(), Some("Attachment: notes.txt"));
+    assert_eq!(location_of(&o, "ospreyfigure").as_deref(), Some("Attached message: Original request"));
+}
+
+#[test]
+fn outlook_ansi_msg_with_html_body() {
+    let o = extract("outlook-ansi.msg").unwrap();
+    assert_eq!(o.parser, "msg");
+    assert_eq!(o.title.as_deref(), Some("Budget review"));
+    assert!(o.text.contains("Jane Doe <jane@example.com>"), "{}", o.text);
+    assert!(o.text.contains("The pelicanmargin figures are final."), "{}", o.text);
+}

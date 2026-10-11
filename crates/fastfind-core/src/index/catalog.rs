@@ -483,6 +483,25 @@ impl Catalog {
         Ok(n)
     }
 
+    /// Once per catalog: make the next scan re-read PDFs indexed from their text layer, so
+    /// scanned pages inside otherwise typed PDFs (detected since 1.3.0) get queued for OCR.
+    /// PDFs already recognised with OCR are left alone. Returns rows marked.
+    pub fn recheck_pdfs_for_scanned_pages(&self) -> Result<usize> {
+        let mut c = self.write.lock();
+        let tx = c.transaction()?;
+        if tx.query_row("SELECT 1 FROM meta WHERE key='pdf_scanned_pages_checked'", [], |_| Ok(())).optional()?.is_some() {
+            return Ok(0);
+        }
+        // An impossible modification time and no content hash: the scanner sees a change.
+        let n = tx.execute(
+            "UPDATE files SET mtime=-1, hash=NULL WHERE kind='pdf' AND status=0 AND flags & ?1 = 0",
+            [crate::model::flags::OCR as i64],
+        )?;
+        tx.execute("INSERT INTO meta(key, value) VALUES('pdf_scanned_pages_checked', '1')", [])?;
+        tx.commit()?;
+        Ok(n)
+    }
+
     pub fn count_pending_ocr(&self) -> u64 {
         let c = self.read.lock();
         c.query_row("SELECT COUNT(*) FROM files WHERE status=5", [], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
@@ -568,6 +587,28 @@ mod tests {
         assert_ne!(row.flags & crate::model::flags::NEEDS_OCR, 0);
         assert_eq!(c.requeue_failed_ocr(true).unwrap(), 1, "then the image");
         assert_eq!(c.count_pending_ocr(), 2, "a parser failure is not an OCR failure");
+    }
+
+    #[test]
+    fn text_layer_pdfs_are_rechecked_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (c, _) = Catalog::open(&dir.path().join("c.db"), &dir.path().join("q")).unwrap();
+        c.add_root("/r").unwrap();
+        let pdf = |path: &str, fl: u64| FileRecord { kind: "pdf".into(), flags: fl, ..rec(path, 1) };
+        c.apply(&[
+            CatOp::Upsert(pdf("/r/typed.pdf", 0)),
+            CatOp::Upsert(pdf("/r/recognised.pdf", crate::model::flags::OCR)),
+            CatOp::Upsert(rec("/r/notes.txt", 1)),
+        ])
+        .unwrap();
+        assert_eq!(c.recheck_pdfs_for_scanned_pages().unwrap(), 1);
+        let snap = c.snapshot(1, None).unwrap();
+        let typed = &snap[&path_hash("/r/typed.pdf")];
+        assert_eq!((typed.mtime_ns, typed.hash), (-1, None), "looks changed to the next scan");
+        assert_eq!(snap[&path_hash("/r/recognised.pdf")].mtime_ns, 5, "OCR text is kept");
+        assert_eq!(snap[&path_hash("/r/notes.txt")].mtime_ns, 5);
+        c.apply(&[CatOp::Upsert(pdf("/r/typed.pdf", 0))]).unwrap();
+        assert_eq!(c.recheck_pdfs_for_scanned_pages().unwrap(), 0, "only once");
     }
 
     #[test]

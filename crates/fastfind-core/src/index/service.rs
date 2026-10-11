@@ -957,7 +957,7 @@ fn process(inner: &Inner, item: &WorkItem) -> Outcome {
     }
     if fl & flags::NEEDS_OCR != 0 {
         status = Status::NeedsOcr;
-        reason = Some("scanned document: OCR required".into());
+        reason = Some("scanned pages: OCR required".into());
     }
     let f = &inner.store.fields;
     let mut doc = base_doc(f, item.root, &item.path, item.size, item.mtime_ns, kind, fl, meta.pages, mode);
