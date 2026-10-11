@@ -121,7 +121,7 @@ impl Engine {
         // An index of an older format is rebuilt from stored data, not by re-reading every
         // file; that needs the catalog and text store that belong to it.
         let stored_cap = (settings.indexing.stored_text_kb as usize) << 10;
-        let upgrade = |old: &Path, new: &Path| crate::index::migrate::migrate(old, new, &catalog, &texts, stored_cap, budget).map(|_| ());
+        let upgrade = |old: &Path, new: &Path| crate::index::migrate::migrate(old, new, &catalog, &texts, stored_cap, writer_threads, budget).map(|_| ());
         let (store, index_new) = IndexStore::open(&paths.index_dir, &paths.quarantine_dir, budget, writer_threads, (!cat_new).then_some(&upgrade as crate::index::store::Upgrade))?;
         // Keep the two stores consistent after a rebuild of either one.
         if index_new && !cat_new {

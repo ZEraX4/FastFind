@@ -43,8 +43,9 @@ pub struct Migrated {
 }
 
 /// Build an index of the current schema in `new_dir` from the index in `old_dir`.
-/// `stored_cap` is the text store's per-document limit in bytes.
-pub fn migrate(old_dir: &Path, new_dir: &Path, catalog: &Catalog, texts: &TextStore, stored_cap: usize, writer_budget: usize) -> Result<Migrated> {
+/// `stored_cap` is the text store's per-document limit in bytes; `threads` and `writer_budget`
+/// size the index writer as for regular indexing.
+pub fn migrate(old_dir: &Path, new_dir: &Path, catalog: &Catalog, texts: &TextStore, stored_cap: usize, threads: usize, writer_budget: usize) -> Result<Migrated> {
     let t0 = Instant::now();
     if new_dir.exists() {
         // Left over from an interrupted upgrade.
@@ -60,7 +61,8 @@ pub fn migrate(old_dir: &Path, new_dir: &Path, catalog: &Catalog, texts: &TextSt
     let (new_schema, f) = schema::build();
     let new = IndexStore::create(new_dir, new_schema)?;
     schema::register_tokenizers(&new);
-    let mut writer = new.writer_with_num_threads(1, writer_budget.max(50_000_000))?;
+    let threads = threads.clamp(1, 8);
+    let mut writer = new.writer_with_num_threads(threads, writer_budget.max(threads * 25_000_000))?;
 
     let mut out = Migrated::default();
     let mut rescan: Vec<String> = Vec::new();
