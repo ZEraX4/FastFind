@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* **Faster file-name search.** `filename:`, the *File name* mode and the file-name part of
+  regex searches no longer walk every name in the index: about 1 ms instead of 19 ms at
+  100,000 files, and 2 ms instead of 119 ms at a million. Regex searches got faster with it.
 * **Outlook messages.** `.msg` files saved from Outlook are searchable like `.eml`: sender,
   recipients, date and subject, the body (plain text, HTML or Outlook's compressed RTF), and
   attachments, including attached Outlook items. Results say where: *Attachment: report.pdf*.

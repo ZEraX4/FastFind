@@ -125,7 +125,7 @@ watcher events ─► debounce 600 ms ─► re-examine path ─► same differ 
 | `path` | raw, stored | upsert/delete key |
 | `pid` | u64 fast | xxh3(path): deterministic tie-break, text-store key |
 | `name` | text, stored | file-name tokens (boosted ×3) |
-| `name_lc` | raw, fast | lowercase name: substring/glob search, name sort |
+| `name_lc` | raw, fast | lowercase name: name sort, and the source of the per-segment name tables that substring/glob name search scans (`search/names.rs`) |
 | `dir` | raw | case-folded parent + `/`: directory-prefix filter (`in:`, folder filter) |
 | `path_t` | text | directory tokens (`path:`) |
 | `ext`, `kind` | raw, stored | `ext:` / `type:` filters |
