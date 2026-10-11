@@ -94,11 +94,14 @@ pub fn html_to_text(html: &str, sink: &mut TextSink, meta: &mut DocMeta) {
             text_start = i;
             continue;
         }
-        let tag_end = match b[i..].iter().position(|&c| c == b'>') {
-            Some(p) => i + p + 1,
-            None => b.len(),
+        // (end of the tag, end of its text): the text stops at '>' or, for a tag that is never
+        // closed, at the end of the input — never one byte earlier, which could split a
+        // character.
+        let (tag_end, inner_end) = match b[i..].iter().position(|&c| c == b'>') {
+            Some(p) => (i + p + 1, i + p),
+            None => (b.len(), b.len()),
         };
-        let inner = &html[i + 1..tag_end.saturating_sub(1).max(i + 1)];
+        let inner = &html[i + 1..inner_end.max(i + 1)];
         let closing = inner.starts_with('/');
         let name: String = inner
             .trim_start_matches('/')
