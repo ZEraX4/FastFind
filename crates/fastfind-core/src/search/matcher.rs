@@ -7,7 +7,7 @@ use regex::{Regex, RegexBuilder};
 
 use super::plan::{MIN_EXPLICIT_PREFIX, MIN_IMPLICIT_PREFIX};
 use super::query::Node;
-use crate::analysis::{normalize, words};
+use crate::analysis::{normalize, query_form, strip_article, words};
 use crate::error::{Error, Result};
 
 /// Finds match spans (byte ranges) in text.
@@ -61,13 +61,15 @@ impl TokenMatcher {
         if self.leaves.is_empty() {
             return;
         }
-        let mut window: VecDeque<(String, usize, usize)> = VecDeque::with_capacity(self.max_len);
+        // (token, token without the Arabic article, start, end)
+        let mut window: VecDeque<(String, Option<String>, usize, usize)> = VecDeque::with_capacity(self.max_len);
         for (s, e) in words(text) {
             let key = self.token_key(&text[s..e]).into_owned();
+            let alt = if self.case_sensitive { None } else { strip_article(&key).map(str::to_string) };
             if window.len() == self.max_len {
                 window.pop_front();
             }
-            window.push_back((key, s, e));
+            window.push_back((key, alt, s, e));
             for (li, leaf) in self.leaves.iter().enumerate() {
                 let n = leaf.tokens.len();
                 if n == 0 || n > window.len() {
@@ -75,10 +77,12 @@ impl TokenMatcher {
                 }
                 let base = window.len() - n;
                 let ok = leaf.tokens.iter().enumerate().all(|(i, t)| {
-                    let w = &window[base + i].0;
-                    if i + 1 == n && leaf.prefix_last { w.starts_with(t.as_str()) } else { w == t }
+                    // Same rule as the index, which holds both forms of an Arabic word.
+                    let (w, alt) = (&window[base + i].0, window[base + i].1.as_deref());
+                    let matches = |w: &str| if i + 1 == n && leaf.prefix_last { w.starts_with(t.as_str()) } else { w == t };
+                    matches(w) || alt.is_some_and(matches)
                 });
-                if ok && !hit(li, window[base].1, window[window.len() - 1].2) {
+                if ok && !hit(li, window[base].2, window[window.len() - 1].3) {
                     return;
                 }
             }
@@ -129,7 +133,7 @@ impl TokenMatcher {
 
 fn leaf_for(text: &str, is_phrase: bool, explicit_prefix: bool, case_sensitive: bool, whole_word: bool) -> Leaf {
     let tokens: Vec<String> = words(text)
-        .map(|(s, e)| if case_sensitive { text[s..e].to_string() } else { normalize(&text[s..e]).into_owned() })
+        .map(|(s, e)| if case_sensitive { text[s..e].to_string() } else { query_form(&text[s..e]) })
         .collect();
     let last = tokens.last().map(|t| t.chars().count()).unwrap_or(0);
     let prefix_last = !is_phrase && if explicit_prefix { last >= MIN_EXPLICIT_PREFIX } else { !whole_word && last >= MIN_IMPLICIT_PREFIX };

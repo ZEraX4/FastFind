@@ -121,7 +121,7 @@ pub struct PlainTextParser;
 pub const PLAIN_EXTENSIONS: &[&str] = &[
     // prose & docs
     "txt", "text", "md", "markdown", "mdown", "rst", "adoc", "asciidoc", "org", "tex", "bib", "log",
-    "nfo", "srt", "vtt", "eml", "mbox", "vcf", "ics", "diff", "patch",
+    "nfo", "srt", "vtt", "mbox", "vcf", "ics", "diff", "patch",
     // tabular
     "csv", "tsv", "tab", "psv",
     // config

@@ -13,7 +13,8 @@ use tantivy::Index;
 use crate::analysis::{FfTokenizer, TOKENIZER_NAME};
 
 /// Bump when the schema or analysis changes; a mismatch triggers an automatic rebuild.
-pub const SCHEMA_VERSION: u32 = 1;
+/// 2: Arabic letter folding and article forms (1.2.0).
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Fields {

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+* **Arabic search.** Spelling variants now find each other: `أ إ آ ٱ` = `ا`, `ة` = `ه`,
+  `ى` = `ي`, Persian `ی` and `ک`, tatweel (`كتـــاب`) and harakat are ignored, and Arabic-Indic
+  or Persian digits match `0-9`. Words are found with or without the definite article and its
+  attached forms (`مدرسة` ↔ `المدرسة`, `والمدرسة`, `للمدرسة`), in phrases too.
+* **E-mail.** `.eml` messages are decoded: encoded subjects and names, base64 and
+  quoted-printable bodies in any charset, HTML-only mail, and attachments. Attached documents
+  (Word, Excel, PDF…), text files and forwarded messages are searchable, and results say
+  where: *Page 2 · Attachment: report.pdf*. The sender, recipients and subject are searchable;
+  the subject and sender appear in the preview.
+* A lone diacritic between spaces no longer creates an empty word in the index.
+* The index is rebuilt once after updating, because words are now analysed differently.
+  Scanned documents are recognised again in the background if OCR is on.
+
 ## 1.1.1 — 2026-10-04
 
 * OCR now works for files whose name or folder contains characters outside the Windows
