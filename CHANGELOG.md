@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* **Faster file-name search.** `filename:`, the *File name* mode and the file-name part of
+  regex searches no longer walk every name in the index: about 1 ms instead of 19 ms at
+  100,000 files, and 2 ms instead of 119 ms at a million. Regex searches got faster with it.
 * **Faster updates of the index format.** When a release changes how text is indexed, existing
   indexes are now rebuilt from the text FastFind already stored, instead of reading every file
   again. Recognised (OCR) text is kept, so scans are never recognised a second time. Only

@@ -191,9 +191,14 @@ Query latency in ms, with the result cache cleared before every run (30 runs eac
 | `invoice -customer` | 4.2 / 4.7 | 9.1 / 10.9 |
 | `quart` (prefix) | 1.9 / 2.6 | 1.8 / 2.7 |
 | `invoice ext:pdf` | 2.5 / 2.8 | 1.1 / 1.4 |
-| `filename:file00012` (substring) | 18.8 / 19.2 | 119 / 150 |
+| `filename:file00012` (substring) | 0.8 / 0.8 | 2.2 / 1.4 |
 | Exact `The invoice total` | 25.8 / 42.1 | 19.4 / 21.5 |
-| Regex `zeppel[a-z]+ total` | 33.0 / 40.4 | 162 / 203 |
+| Regex `zeppel[a-z]+ total` | 25.0 / 30.9 | 50.5 / 72.2 |
+
+The file-name and regex rows were measured again after file-name search stopped walking the
+term dictionary (1.3.0; before: 18.8 and 119 ms for `filename:`, 33 and 162 ms for the regex).
+The first name query after a change builds a small per-segment table (7 ms at 100k files, 37 ms
+at 1M), which is why the 1M average is above its p95.
 
 Snippets for a page of 100 results take 3–15 ms. `docs/ARCHITECTURE.md` §8 lists the
 profiling-driven optimisations behind these numbers.

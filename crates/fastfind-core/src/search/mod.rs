@@ -2,6 +2,7 @@
 
 pub mod engine;
 pub mod matcher;
+pub mod names;
 pub mod plan;
 pub mod query;
 pub mod snippet;
