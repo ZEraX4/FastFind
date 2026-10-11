@@ -2,9 +2,10 @@
 
 ## Unreleased
 
-* **Fixed (found by fuzzing):** a crafted `.xls` file could make FastFind try to allocate
-  gigabytes of memory, which can close the app; the workbook is now read from a validated copy
-  of the file's container. An HTML file ending inside an unclosed tag could fail to index.
+* **Fixed (found by fuzzing):** crafted `.xls` files could make FastFind try to allocate
+  gigabytes or terabytes of memory, which can close the app: through the file's container, or
+  through a sheet's declared size. The workbook is now read from a validated copy with the size
+  hints removed. An HTML file ending inside an unclosed tag could fail to index.
 * **Zip archives.** Files inside `.zip` archives are found by name and by content: text files
   (in any encoding), Office documents, PDFs, e-mails and archives inside the archive. Results
   say where: *Page 2 · In archive: reports/annual.pdf*. Images and other unreadable files are
