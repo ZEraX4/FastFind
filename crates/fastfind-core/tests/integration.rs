@@ -341,3 +341,168 @@ fn folder_filter_resolves_links_to_indexed_folders() {
     assert_eq!(search(&e, &format!("albatross in:\"{via_alias}\"")), ["deck.pptx"]);
     e.shutdown();
 }
+
+/// Arabic: letter variants, tatweel, digits and the definite article match the way readers
+/// expect, in search, phrases, prefixes (search-as-you-type) and highlighting.
+#[test]
+fn arabic_text_is_found_regardless_of_spelling_variants() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("مستندات");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("تقرير.txt"), "ذهب أحمد إلى المدرسة الكبيرة صباحاً.\nالفاتورة رقم ٢٠٢٦ مدفوعة.\n").unwrap();
+    fs::write(root.join("رسالة.txt"), "زار الطالبُ مستشفى المدينة. كتـــاب جديد للمكتبة.\n").unwrap();
+    write_docx(&root.join("محضر.docx"), "محضر الاجتماع", &["ناقش المجلس ميزانية الجامعة".into()]).unwrap();
+    fs::write(root.join("other.txt"), "plain english text about invoices\n").unwrap();
+
+    let e = open(&tmp.path().join("data"), false);
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(120)));
+
+    // Alef forms, teh marbuta and the article.
+    assert_eq!(search(&e, "احمد"), ["تقرير.txt"]);
+    assert_eq!(search(&e, "مدرسة"), ["تقرير.txt"], "without the article finds the word with it");
+    assert_eq!(search(&e, "المدرسه"), ["تقرير.txt"]);
+    assert_eq!(search(&e, "\"مدرسة كبيرة\""), ["تقرير.txt"], "phrases match across article forms");
+    assert_eq!(search(&e, "\"المدرسة الكبيرة\""), ["تقرير.txt"]);
+    // Search as you type: partial words with the article still match.
+    assert_eq!(search(&e, "المد"), ["تقرير.txt", "رسالة.txt"], "المدرسة and المدينة");
+    assert_eq!(search(&e, "المدر"), ["تقرير.txt"]);
+    assert_eq!(search(&e, "مدر"), ["تقرير.txt"]);
+    // Alef maksura, tatweel, harakat, attached prepositions.
+    assert_eq!(search(&e, "مستشفي"), ["رسالة.txt"]);
+    assert_eq!(search(&e, "كتاب"), ["رسالة.txt"]);
+    assert_eq!(search(&e, "الطالب"), ["رسالة.txt"]);
+    assert_eq!(search(&e, "مكتبة"), ["رسالة.txt"], "للمكتبة");
+    // Digits in either script.
+    assert_eq!(search(&e, "2026"), ["تقرير.txt"]);
+    assert_eq!(search(&e, "٢٠٢٦"), ["تقرير.txt"]);
+    // Office documents and file names go through the same analysis.
+    assert_eq!(search(&e, "جامعة"), ["محضر.docx"]);
+    assert_eq!(search(&e, "تقرير"), ["تقرير.txt"]);
+    // Short words keep the article: الله-style words are not reduced to two letters.
+    assert!(search(&e, "له").is_empty());
+
+    // Highlights cover the whole original word, article and all.
+    let req = SearchRequest::new("مدرسة");
+    let path = e.search(&req, &CancelToken::new()).unwrap().items.remove(0).path;
+    let sn = e.snippets(&req, std::slice::from_ref(&path)).unwrap().remove(0);
+    let s = &sn.snippets[0];
+    let utf16: Vec<u16> = s.text.encode_utf16().collect();
+    let [a, b] = s.highlights[0];
+    assert_eq!(String::from_utf16(&utf16[a as usize..b as usize]).unwrap(), "المدرسة");
+
+    // Exact mode stays literal.
+    let mut ex = SearchRequest::new("المدرسة الكبيرة");
+    ex.mode = SearchMode::Exact;
+    assert_eq!(search_req(&e, ex), ["تقرير.txt"]);
+    let mut ex = SearchRequest::new("مدرسة كبيرة");
+    ex.mode = SearchMode::Exact;
+    assert!(search_req(&e, ex).is_empty(), "Exact matches characters, not normalised words");
+    e.shutdown();
+}
+
+fn b64(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for (i, chunk) in data.chunks(3).enumerate() {
+        if i > 0 && i % 19 == 0 {
+            out.push_str("\r\n"); // 76-character lines, as mail clients write them
+        }
+        let n = chunk.len();
+        let v = (chunk[0] as u32) << 16 | (*chunk.get(1).unwrap_or(&0) as u32) << 8 | *chunk.get(2).unwrap_or(&0) as u32;
+        for k in 0..4 {
+            out.push(if k <= n { T[(v >> (18 - 6 * k) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
+/// A realistic message: quoted-printable body, a Word and a PDF attachment, a text file, a
+/// forwarded message and an image. Everything readable becomes searchable, with locations.
+#[test]
+fn email_bodies_and_attachments_are_searchable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("mail");
+    fs::create_dir_all(&root).unwrap();
+    let docx = tmp.path().join("a.docx");
+    write_docx(&docx, "Budget", &["The kookaburra budget line was approved.".into()]).unwrap();
+    let pdf = tmp.path().join("a.pdf");
+    write_pdf(&pdf, "Report", &[vec!["First page about penguins.".into()], vec!["Second page mentions the narwhal.".into()]]).unwrap();
+    let png = b"\x89PNG\r\n\x1a\nnot really an image but binary";
+
+    let mime = format!(
+        "From: =?UTF-8?Q?Ay=C5=9Fe_Y?= <ayse@example.com>\r\n\
+To: team@example.com\r\n\
+Subject: =?UTF-8?Q?Quarterly_numbers_=E2=80=93_flamingo?=\r\n\
+Date: Mon, 5 Oct 2026 09:30:00 +0300\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: multipart/mixed; boundary=\"OUTER\"\r\n\r\n\
+--OUTER\r\n\
+Content-Type: multipart/alternative; boundary=\"ALT\"\r\n\r\n\
+--ALT\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+Content-Transfer-Encoding: quoted-printable\r\n\r\n\
+Please review the axolotl figures before Friday. Te=C5=9Fekk=C3=BCrler.\r\n\
+--ALT\r\n\
+Content-Type: text/html; charset=utf-8\r\n\r\n\
+<p>Please review the <b>axolotl</b> figures before Friday.</p>\r\n\
+--ALT--\r\n\
+--OUTER\r\n\
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document; name=\"budget.docx\"\r\n\
+Content-Disposition: attachment; filename=\"budget.docx\"\r\n\
+Content-Transfer-Encoding: base64\r\n\r\n{}\r\n\
+--OUTER\r\n\
+Content-Type: application/pdf; name=\"report.pdf\"\r\n\
+Content-Disposition: attachment; filename=\"report.pdf\"\r\n\
+Content-Transfer-Encoding: base64\r\n\r\n{}\r\n\
+--OUTER\r\n\
+Content-Type: text/plain; charset=utf-8; name=\"notes.txt\"\r\n\
+Content-Disposition: attachment; filename=\"notes.txt\"\r\n\r\n\
+Reminder about the quokka workshop.\r\n\
+--OUTER\r\n\
+Content-Type: message/rfc822\r\n\
+Content-Disposition: attachment; filename=\"forwarded.eml\"\r\n\r\n\
+From: boss@example.com\r\n\
+Subject: Original request\r\n\
+Content-Type: text/plain\r\n\r\n\
+Can you check the pangolin numbers?\r\n\
+--OUTER\r\n\
+Content-Type: image/png; name=\"logo.png\"\r\n\
+Content-Disposition: attachment; filename=\"logo.png\"\r\n\
+Content-Transfer-Encoding: base64\r\n\r\n{}\r\n\
+--OUTER--\r\n",
+        b64(&fs::read(&docx).unwrap()),
+        b64(&fs::read(&pdf).unwrap()),
+        b64(png),
+    );
+    fs::write(root.join("quarterly.eml"), mime).unwrap();
+    fs::write(root.join("broken.eml"), b"\x00\x01 not a message \xff\xfe").unwrap();
+
+    let e = open(&tmp.path().join("data"), false);
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(120)));
+
+    for word in ["axolotl", "flamingo", "ayse", "kookaburra", "narwhal", "quokka", "pangolin", "tesekkurler"] {
+        assert_eq!(search(&e, word), ["quarterly.eml"], "{word}");
+    }
+    let item = e.search(&SearchRequest::new("flamingo"), &CancelToken::new()).unwrap().items.remove(0);
+    assert_eq!(item.kind, "text");
+
+    // Locations name the attachment, and keep the attachment's own pages.
+    let loc = |q: &str| {
+        let sn = e.snippets(&SearchRequest::new(q), std::slice::from_ref(&item.path)).unwrap().remove(0);
+        sn.snippets[0].location.clone()
+    };
+    assert_eq!(loc("kookaburra").as_deref(), Some("≈ Page 1 · Attachment: budget.docx"));
+    assert_eq!(loc("narwhal").as_deref(), Some("Page 2 · Attachment: report.pdf"));
+    assert_eq!(loc("quokka").as_deref(), Some("Attachment: notes.txt"));
+    assert_eq!(loc("pangolin").as_deref(), Some("Attached message: Original request"));
+    assert_eq!(loc("axolotl"), None, "the message body has no location");
+
+    // Title and author come from the headers; a damaged file does not stop indexing.
+    let pv = e.preview(&SearchRequest::new("axolotl"), &item.path).unwrap();
+    assert_eq!(pv.title.as_deref(), Some("Quarterly numbers – flamingo"));
+    assert_eq!(pv.author.as_deref(), Some("Ayşe Y"));
+    assert_eq!(e.status().unwrap().failed, 0);
+    e.shutdown();
+}

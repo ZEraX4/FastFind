@@ -10,8 +10,12 @@ request it ever makes is an optional, opt-in update check.
 </p>
 
 * **Formats:** TXT, Markdown, CSV/TSV, logs, 150+ source/config types, HTML, XML, JSON, RTF,
-  **DOC, DOCX, XLS, XLSX, PPT, PPTX**, ODT/ODS/ODP, EPUB and **PDF** (via PDFium). Scanned PDFs
-  are detected and can be OCR'd with a local Tesseract.
+  **DOC, DOCX, XLS, XLSX, PPT, PPTX**, ODT/ODS/ODP, EPUB, **PDF** (via PDFium) and e-mail
+  (**EML**, including attachments). Scanned PDFs are detected and can be OCR'd with a local
+  Tesseract.
+* **Languages:** accents are ignored (`Café` = `cafe`, `Geçiş` = `gecis`), and Arabic is
+  normalized: `أ إ آ` = `ا`, `ة` = `ه`, `ى` = `ي`, tatweel and harakat are ignored, Arabic-Indic
+  digits match `0-9`, and `مدرسة` finds `المدرسة`.
 * **Search:** words, `"phrases"`, `AND` / `OR` / `NOT`, `-exclusions`, `(grouping)`, `prefix*`,
   plus filters `filename:` `ext:` `type:` `path:` `in:` `modified:` `size:`. Case-sensitive,
   whole-word, exact-string and regex modes.

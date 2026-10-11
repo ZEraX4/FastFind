@@ -136,8 +136,13 @@ watcher events ─► debounce 600 ms ─► re-examine path ─► same differ 
 
 **Analysis:** runs of alphanumeric characters form tokens (so `invoice-2024`, `my_var` and
 `a.b` are found by their parts). CJK ideographs are indexed one per token, text is lowercased
-and diacritics are folded (`Café` = `cafe`). The same tokenizer drives highlighting, so a
-highlight always matches what the index matched.
+and diacritics are folded (`Café` = `cafe`). Arabic letters are folded too (alef forms, ة → ه,
+ى/ی → ي, ک → ك, tatweel removed, Arabic-Indic and Persian digits → 0-9). Words with the Arabic
+definite article (`المدرسة`, `والمدرسة`, `للمدرسة`…) are indexed twice at the same position,
+with and without it, and queries drop the article from whole words: so `مدرسة` and `المدرسة`
+find each other, phrases still line up, and a partly typed `المد` still matches. The same
+tokenizer drives highlighting, so a highlight always matches what the index matched. Changing
+any rule requires bumping `SCHEMA_VERSION`, which rebuilds existing indexes.
 
 ### 3.3 Query execution
 

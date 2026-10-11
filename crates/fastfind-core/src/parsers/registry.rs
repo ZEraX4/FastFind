@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::doc::DocParser;
+use super::email::EmailParser;
 use super::epub::EpubParser;
 use super::html::HtmlParser;
 use super::json::JsonParser;
@@ -76,7 +77,7 @@ impl ParserRegistry {
         let all: Vec<ParserRef> = vec![
             plain.clone(), html.clone(), xml.clone(), rtf.clone(), pdf.clone(), doc.clone(), xls.clone(),
             ppt.clone(), Arc::new(JsonParser), Arc::new(DocxParser), Arc::new(XlsxParser),
-            Arc::new(PptxParser), Arc::new(OdfParser), Arc::new(EpubParser),
+            Arc::new(PptxParser), Arc::new(OdfParser), Arc::new(EpubParser), Arc::new(EmailParser),
         ];
         let mut by_ext = HashMap::new();
         for p in &all {

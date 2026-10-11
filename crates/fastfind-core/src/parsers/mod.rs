@@ -7,6 +7,7 @@
 //! with `catch_unwind`.
 
 pub mod doc;
+pub mod email;
 pub mod epub;
 pub mod html;
 pub mod json;

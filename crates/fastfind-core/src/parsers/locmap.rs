@@ -14,6 +14,10 @@ pub enum LocKind {
     /// consecutive rows until the next `Row` anchor.
     Row(u32),
     Section(String),
+    /// Start of a self-contained part of a container, e.g. an e-mail attachment. Anchors
+    /// before it never describe text after it, and its label wraps the inner location
+    /// ("Page 2 · Attachment: report.pdf").
+    Part(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -55,7 +59,17 @@ pub fn describe(locs: &[Loc], text: &str, offset: usize, line_based: bool) -> Op
     let mut sheet: Option<(&str, u32)> = None;
     let mut row: Option<(u32, u32)> = None;
     let mut section = None;
+    let mut part = None;
+    let mut inner_done = false;
     for l in before.iter().rev() {
+        if let LocKind::Part(p) = &l.kind {
+            part = Some(p.clone());
+            break;
+        }
+        if inner_done {
+            // Slide or sheet found; only look for an enclosing part.
+            continue;
+        }
         match &l.kind {
             LocKind::Page(p) if page.is_none() => page = Some(format!("Page {p}")),
             LocKind::PageApprox(p) if page.is_none() => page = Some(format!("≈ Page {p}")),
@@ -71,27 +85,33 @@ pub fn describe(locs: &[Loc], text: &str, offset: usize, line_based: bool) -> Op
             _ => {}
         }
         if slide.is_some() || sheet.is_some() {
-            break;
+            inner_done = true;
         }
     }
-    if let Some((name, _)) = sheet {
-        if let Some((r, row_off)) = row {
-            let seg = &text.as_bytes()[row_off as usize..offset];
-            let lines = seg.iter().filter(|&&b| b == b'\n').count() as u32;
-            let line_start = seg.iter().rposition(|&b| b == b'\n').map(|p| p + 1).unwrap_or(0);
-            let col = seg[line_start..].iter().filter(|&&b| b == b'\t').count() as u32;
-            return Some(format!("{name}!{}{}", column_letters(col), r + lines));
+    let inner = if let Some((name, _)) = sheet {
+        Some(match row {
+            Some((r, row_off)) => {
+                let seg = &text.as_bytes()[row_off as usize..offset];
+                let lines = seg.iter().filter(|&&b| b == b'\n').count() as u32;
+                let line_start = seg.iter().rposition(|&b| b == b'\n').map(|p| p + 1).unwrap_or(0);
+                let col = seg[line_start..].iter().filter(|&&b| b == b'\t').count() as u32;
+                format!("{name}!{}{}", column_letters(col), r + lines)
+            }
+            None => format!("Sheet {name}"),
+        })
+    } else if slide.is_some() {
+        slide
+    } else {
+        match (page, section) {
+            (Some(p), Some(s)) => Some(format!("{p} · {s}")),
+            (Some(p), None) => Some(p),
+            (None, Some(s)) => Some(s),
+            (None, None) => None,
         }
-        return Some(format!("Sheet {name}"));
-    }
-    if let Some(s) = slide {
-        return Some(s);
-    }
-    match (page, section) {
-        (Some(p), Some(s)) => Some(format!("{p} · {s}")),
-        (Some(p), None) => Some(p),
-        (None, Some(s)) => Some(s),
-        (None, None) => None,
+    };
+    match (inner, part) {
+        (Some(i), Some(p)) => Some(format!("{i} · {p}")),
+        (i, p) => i.or(p),
     }
 }
 
@@ -111,6 +131,31 @@ pub fn decode(bytes: &[u8]) -> Vec<Loc> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parts_wrap_inner_locations_and_stop_older_anchors() {
+        // Body, then a PDF attachment with two pages, then a text attachment, then a workbook.
+        let text = "body\npdf one\npdf two\nnotes\nA\tB\nx\ty\n";
+        let at = |s: &str| text.find(s).unwrap() as u32;
+        let locs = vec![
+            Loc { offset: at("pdf one"), kind: LocKind::Part("Attachment: r.pdf".into()) },
+            Loc { offset: at("pdf one"), kind: LocKind::Page(1) },
+            Loc { offset: at("pdf two"), kind: LocKind::Page(2) },
+            Loc { offset: at("notes"), kind: LocKind::Part("Attachment: n.txt".into()) },
+            Loc { offset: at("A\t"), kind: LocKind::Part("Attachment: b.xlsx".into()) },
+            Loc { offset: at("A\t"), kind: LocKind::Sheet("Q1".into()) },
+            Loc { offset: at("A\t"), kind: LocKind::Row(1) },
+        ];
+        let d = |s: &str| describe(&locs, text, text.find(s).unwrap(), false);
+        assert_eq!(d("body"), None);
+        assert_eq!(d("pdf two").as_deref(), Some("Page 2 · Attachment: r.pdf"));
+        assert_eq!(d("notes").as_deref(), Some("Attachment: n.txt"), "no page from the previous attachment");
+        let y = text.find("x\ty").unwrap() + 2;
+        assert_eq!(describe(&locs, text, y, false).as_deref(), Some("Q1!B2 · Attachment: b.xlsx"));
+        // Stored anchors round-trip, and data without the new kind still decodes.
+        assert_eq!(decode(&encode(&locs)), locs);
+        assert_eq!(decode(br#"[{"offset":3,"kind":{"Page":2}}]"#), vec![Loc { offset: 3, kind: LocKind::Page(2) }]);
+    }
 
     #[test]
     fn letters() {
