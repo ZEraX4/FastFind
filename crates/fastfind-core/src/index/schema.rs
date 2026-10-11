@@ -12,7 +12,8 @@ use tantivy::Index;
 
 use crate::analysis::{FfTokenizer, TOKENIZER_NAME};
 
-/// Bump when the schema or analysis changes; a mismatch triggers an automatic rebuild.
+/// Bump when the schema or analysis changes. An index of an older version is rebuilt from its
+/// stored data on the next start (see `migrate`); files without stored text are read again.
 /// 2: Arabic letter folding and article forms (1.2.0).
 pub const SCHEMA_VERSION: u32 = 2;
 

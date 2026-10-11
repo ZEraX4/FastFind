@@ -142,7 +142,7 @@ definite article (`المدرسة`, `والمدرسة`, `للمدرسة`…) are
 with and without it, and queries drop the article from whole words: so `مدرسة` and `المدرسة`
 find each other, phrases still line up, and a partly typed `المد` still matches. The same
 tokenizer drives highlighting, so a highlight always matches what the index matched. Changing
-any rule requires bumping `SCHEMA_VERSION`, which rebuilds existing indexes.
+any rule requires bumping `SCHEMA_VERSION`; see §4 for how existing indexes are upgraded.
 
 ### 3.3 Query execution
 
@@ -183,6 +183,18 @@ Location anchors recorded during extraction map a byte offset to `Page 3`, `≈ 
 ├── logs/                JSON lines, daily rotation, 7 files; paths and errors only, never document text
 └── quarantine/          damaged stores moved aside during automatic recovery
 ```
+
+**Format upgrades.** When `SCHEMA_VERSION` changes, the next start builds a new index in
+`index.upgrade/` from data already on disk: each document's stored fields in the old index
+(pages, metadata, text mode), its catalog row and its text in `text.db`. Nothing is parsed and
+nothing is recognised again, so OCR text survives (even when its stored copy was cut at the
+store limit). Files without stored text (plain text and other raw files, re-parsed formats,
+and documents whose stored text was cut) are marked changed in the catalog and read by the
+startup scan. The new index replaces the old one only when complete; an interrupted upgrade
+starts again from the untouched old index. If the upgrade fails, the old index is quarantined
+and everything is indexed again, as before. The catalog's own format (`CATALOG_VERSION`) has
+not changed since 1.0; a future change should add an SQL migration rather than bump it, since
+a catalog mismatch still means a full rebuild.
 
 ---
 
