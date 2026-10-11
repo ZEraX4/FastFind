@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/fastfind-core", "crates/fastfind-cli", "src-tauri"]
+# Fuzzing needs nightly Rust; see fuzz/README.md.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "1.2.0"
