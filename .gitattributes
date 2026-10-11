@@ -5,6 +5,7 @@
 # Test fixtures must stay byte-for-byte identical
 crates/fastfind-core/tests/fixtures/** binary
 crates/fastfind-core/tests/fixtures/README.md text eol=lf
+crates/fastfind-core/tests/regressions/** binary
 *.png binary
 *.ico binary
 *.icns binary

@@ -1,0 +1,145 @@
+[package]
+name = "fastfind-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+fastfind-core = { path = "../crates/fastfind-core" }
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
+# Not part of the main workspace: fuzzing needs the nightly toolchain.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "seed"
+path = "src/seed.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "doc"
+path = "fuzz_targets/doc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "docx"
+path = "fuzz_targets/docx.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "eml"
+path = "fuzz_targets/eml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "epub"
+path = "fuzz_targets/epub.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html"
+path = "fuzz_targets/html.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "json"
+path = "fuzz_targets/json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "msg"
+path = "fuzz_targets/msg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "odf"
+path = "fuzz_targets/odf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "plain"
+path = "fuzz_targets/plain.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ppt"
+path = "fuzz_targets/ppt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pptx"
+path = "fuzz_targets/pptx.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "query"
+path = "fuzz_targets/query.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rtf"
+path = "fuzz_targets/rtf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xls"
+path = "fuzz_targets/xls.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xlsx"
+path = "fuzz_targets/xlsx.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xml"
+path = "fuzz_targets/xml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "zip"
+path = "fuzz_targets/zip.rs"
+test = false
+doc = false
+bench = false
