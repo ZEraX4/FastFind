@@ -5,6 +5,10 @@
 * **Faster file-name search.** `filename:`, the *File name* mode and the file-name part of
   regex searches no longer walk every name in the index: about 1 ms instead of 19 ms at
   100,000 files, and 2 ms instead of 119 ms at a million. Regex searches got faster with it.
+* **Faster updates of the index format.** When a release changes how text is indexed, existing
+  indexes are now rebuilt from the text FastFind already stored, instead of reading every file
+  again. Recognised (OCR) text is kept, so scans are never recognised a second time. Only
+  plain-text files and a few very large documents are read again.
 * **Fixed (found by fuzzing):** crafted `.xls` files could make FastFind try to allocate
   gigabytes or terabytes of memory, which can close the app: through the file's container, or
   through a sheet's declared size, or by placing two cells far apart. The workbook is now read

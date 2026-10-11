@@ -4,6 +4,7 @@
 //!   error), directory access statistics. Source of truth for incremental indexing.
 //! * [`store`] – Tantivy full-text index (inverted index, positions, fast fields).
 //! * [`textstore`] – zstd-compressed extracted text for binary formats (snippets/preview).
+//! * [`migrate`] – index format upgrades rebuilt from stored data instead of re-reading files.
 //! * [`service`] – scanner → change detection → bounded lanes → parser workers → single
 //!   writer, plus file watching, OCR scheduling and progress reporting.
 //!
@@ -12,6 +13,7 @@
 //! to be re-indexed on the next start.
 
 pub mod catalog;
+pub mod migrate;
 pub mod schema;
 pub mod service;
 pub mod store;

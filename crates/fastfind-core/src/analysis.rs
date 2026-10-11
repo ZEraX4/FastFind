@@ -16,7 +16,9 @@
 //!   ([`strip_article`], [`query_form`]).
 //!
 //! Changing any rule changes what existing indexes contain: bump
-//! [`crate::index::schema::SCHEMA_VERSION`] in the same commit.
+//! [`crate::index::schema::SCHEMA_VERSION`] in the same commit. Existing indexes are then
+//! re-tokenised from stored text on the next start ([`crate::index::migrate`]); only files
+//! without stored text are read again.
 
 use std::borrow::Cow;
 
