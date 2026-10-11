@@ -506,3 +506,47 @@ Content-Transfer-Encoding: base64\r\n\r\n{}\r\n\
     assert_eq!(e.status().unwrap().failed, 0);
     e.shutdown();
 }
+
+#[test]
+fn an_older_index_format_is_rebuilt_from_stored_text_without_reparsing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("docs");
+    fs::create_dir_all(&root).unwrap();
+    write_docx(&root.join("report.docx"), "Annual", &["The kookaburra census was completed.".into()]).unwrap();
+    fs::write(root.join("notes.txt"), "Field notes about the platypus.\n").unwrap();
+    fs::write(root.join("page.html"), "<html><body><p>The quoll survey.</p></body></html>").unwrap();
+    fs::write(root.join("blob.bin"), [0u8, 1, 2, 3, 255]).unwrap();
+    let data = tmp.path().join("data");
+    let paths = AppPaths::new(data.clone());
+    let e = open(&data, false);
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(60)));
+    assert_eq!(search(&e, "kookaburra"), ["report.docx"]);
+    e.shutdown();
+    drop(e);
+
+    // Pretend an older version wrote the index, and that an earlier upgrade was interrupted.
+    let version_file = paths.index_dir.join("fastfind-schema-version");
+    fs::write(&version_file, (fastfind_core::index::schema::SCHEMA_VERSION - 1).to_string()).unwrap();
+    fs::create_dir_all(paths.index_dir.with_extension("upgrade").join("junk")).unwrap();
+    // Wreck the Word file without changing its size or date: parsing it again would fail.
+    let docx = root.join("report.docx");
+    let modified = fs::metadata(&docx).unwrap().modified().unwrap();
+    let size = fs::metadata(&docx).unwrap().len() as usize;
+    fs::write(&docx, vec![0u8; size]).unwrap();
+    fs::File::options().write(true).open(&docx).unwrap().set_modified(modified).unwrap();
+
+    let e = Engine::open(paths.clone(), EngineOptions { pdfium_dirs: vec![], watch: false, scan_on_start: false, pdf_worker_exe: None }).unwrap();
+    assert_eq!(fs::read_to_string(&version_file).unwrap().trim(), fastfind_core::index::schema::SCHEMA_VERSION.to_string());
+    assert!(!paths.index_dir.with_extension("upgrade").exists(), "leftovers of an interrupted upgrade are removed");
+    // Before any scan: the Word document is back from its stored text, names are searchable.
+    assert_eq!(search(&e, "kookaburra"), ["report.docx"]);
+    assert_eq!(search(&e, "blob"), ["blob.bin"]);
+    // Plain text and HTML are not stored; the scan reads them again.
+    assert!(search(&e, "platypus").is_empty());
+    e.rescan(None);
+    assert!(wait_for(Duration::from_secs(60), || search(&e, "platypus") == ["notes.txt"] && search(&e, "quoll") == ["page.html"]));
+    assert_eq!(search(&e, "kookaburra"), ["report.docx"], "not parsed again");
+    assert_eq!(e.status().unwrap().failed, 0);
+    e.shutdown();
+}

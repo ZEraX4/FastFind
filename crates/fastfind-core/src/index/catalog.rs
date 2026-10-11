@@ -502,6 +502,20 @@ impl Catalog {
         Ok(n)
     }
 
+    /// Make the next scan read these files again, whatever their size and date.
+    pub fn mark_changed(&self, paths: &[String]) -> Result<()> {
+        let mut c = self.write.lock();
+        let tx = c.transaction()?;
+        {
+            let mut st = tx.prepare_cached("UPDATE files SET mtime=-1, hash=NULL WHERE path=?1")?;
+            for p in paths {
+                st.execute([p])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn count_pending_ocr(&self) -> u64 {
         let c = self.read.lock();
         c.query_row("SELECT COUNT(*) FROM files WHERE status=5", [], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64

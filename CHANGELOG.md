@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* **Faster updates of the index format.** When a release changes how text is indexed, existing
+  indexes are now rebuilt from the text FastFind already stored, instead of reading every file
+  again. Recognised (OCR) text is kept, so scans are never recognised a second time. Only
+  plain-text files and a few very large documents are read again.
 * **Outlook messages.** `.msg` files saved from Outlook are searchable like `.eml`: sender,
   recipients, date and subject, the body (plain text, HTML or Outlook's compressed RTF), and
   attachments, including attached Outlook items. Results say where: *Attachment: report.pdf*.

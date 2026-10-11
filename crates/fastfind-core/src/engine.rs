@@ -117,7 +117,12 @@ impl Engine {
             crate::config::CpuPreference::High => (cores / 2).clamp(2, 8),
         };
         let budget = ((settings.performance.memory_cache_mb as usize / 2) << 20).max(writer_threads * (24 << 20));
-        let (store, index_new) = IndexStore::open(&paths.index_dir, &paths.quarantine_dir, budget, writer_threads)?;
+        let texts = TextStore::open(&paths.text_db, &paths.quarantine_dir)?;
+        // An index of an older format is rebuilt from stored data, not by re-reading every
+        // file; that needs the catalog and text store that belong to it.
+        let stored_cap = (settings.indexing.stored_text_kb as usize) << 10;
+        let upgrade = |old: &Path, new: &Path| crate::index::migrate::migrate(old, new, &catalog, &texts, stored_cap, budget).map(|_| ());
+        let (store, index_new) = IndexStore::open(&paths.index_dir, &paths.quarantine_dir, budget, writer_threads, (!cat_new).then_some(&upgrade as crate::index::store::Upgrade))?;
         // Keep the two stores consistent after a rebuild of either one.
         if index_new && !cat_new {
             tracing::warn!("index was rebuilt; all files will be re-indexed");
@@ -127,7 +132,6 @@ impl Engine {
             tracing::warn!("catalog was rebuilt; clearing index to stay consistent");
             store.clear()?;
         }
-        let texts = TextStore::open(&paths.text_db, &paths.quarantine_dir)?;
         if index_new || cat_new {
             texts.clear()?;
         }

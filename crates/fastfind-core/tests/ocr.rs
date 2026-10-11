@@ -408,3 +408,43 @@ fn files_that_failed_on_a_non_ascii_path_are_retried_after_upgrading() {
     assert_eq!(names(&e, "heron"), ["Geçiş izni.png"]);
     e.shutdown();
 }
+
+#[test]
+fn recognised_text_survives_an_index_format_upgrade() {
+    if tools().is_none() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("scans");
+    std::fs::create_dir_all(&root).unwrap();
+    let imgs = scan_pages(tmp.path(), &[&["The echidna archive was scanned."], &["A photo of the bilby burrow."]]);
+    write_scan(&root.join("archive.pdf"), &imgs[..1]);
+    imgs[1].save(root.join("bilby.png")).unwrap();
+    let paths = AppPaths::new(tmp.path().join("data"));
+    let opts = || EngineOptions { pdfium_dirs: vec![pdfium_dir()], watch: false, scan_on_start: false, pdf_worker_exe: None };
+
+    let e = Engine::open(paths.clone(), opts()).unwrap();
+    let mut s = e.settings();
+    s.indexing.ocr.enabled = true;
+    s.indexing.ocr.images = true;
+    s.indexing.ocr.languages = "eng".into();
+    e.update_settings(s.clone()).unwrap();
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(wait_for(Duration::from_secs(180), || names(&e, "echidna") == ["archive.pdf"] && names(&e, "bilby").contains(&"bilby.png".to_string()) && e.status().unwrap().needs_ocr == 0));
+    // OCR off from now on: anything recognised after the upgrade would have to come from storage.
+    s.indexing.ocr.enabled = false;
+    e.update_settings(s).unwrap();
+    e.shutdown();
+    drop(e);
+
+    std::fs::write(paths.index_dir.join("fastfind-schema-version"), (fastfind_core::index::schema::SCHEMA_VERSION - 1).to_string()).unwrap();
+    let e = Engine::open(paths, opts()).unwrap();
+    assert_eq!(names(&e, "echidna"), ["archive.pdf"], "OCR text of a scanned PDF is kept");
+    assert!(names(&e, "burrow").contains(&"bilby.png".to_string()), "OCR text of an image is kept");
+    e.rescan(None);
+    assert!(e.wait_idle(Duration::from_secs(60)));
+    assert_eq!(names(&e, "echidna"), ["archive.pdf"]);
+    let st = e.status().unwrap();
+    assert_eq!((st.needs_ocr, st.failed), (0, 0), "nothing waits for OCR again");
+    e.shutdown();
+}

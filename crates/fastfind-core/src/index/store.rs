@@ -14,6 +14,9 @@ use crate::error::{Error, Result};
 
 const VERSION_FILE: &str = "fastfind-schema-version";
 
+/// Builds a current-format index in the second folder from the old one in the first.
+pub type Upgrade<'a> = &'a dyn Fn(&Path, &Path) -> Result<()>;
+
 pub struct IndexStore {
     pub index: Index,
     pub fields: Fields,
@@ -34,8 +37,43 @@ pub fn quarantine(path: &Path, quarantine_dir: &Path) -> std::io::Result<PathBuf
 impl IndexStore {
     /// Open (or create) the index. Returns `(store, rebuilt)` where `rebuilt` means the index
     /// is new or was recreated, so the catalog must forget what was indexed.
-    pub fn open(dir: &Path, quarantine_dir: &Path, writer_budget: usize, writer_threads: usize) -> Result<(Self, bool)> {
+    ///
+    /// An index of an older `SCHEMA_VERSION` is upgraded with `upgrade(old_dir, new_dir)`, which
+    /// builds a current index in `new_dir` from stored data (see [`super::migrate`]); it is then
+    /// swapped in and `rebuilt` is false. If there is no upgrade or it fails, the old index is
+    /// quarantined and a new one created.
+    pub fn open(
+        dir: &Path,
+        quarantine_dir: &Path,
+        writer_budget: usize,
+        writer_threads: usize,
+        upgrade: Option<Upgrade<'_>>,
+    ) -> Result<(Self, bool)> {
         let (schema, fields) = schema::build();
+        let new_dir = dir.with_extension("upgrade");
+        if new_dir.exists() {
+            // Left over from an upgrade that was interrupted.
+            let _ = std::fs::remove_dir_all(&new_dir);
+        }
+        let version = std::fs::read_to_string(dir.join(VERSION_FILE)).ok().and_then(|v| v.trim().parse::<u32>().ok());
+        if let (Some(v), Some(upgrade)) = (version, upgrade) {
+            if v != SCHEMA_VERSION && dir.join("meta.json").exists() {
+                match upgrade(dir, &new_dir) {
+                    Ok(()) => {
+                        // Swap: the old index goes to quarantine (kept for diagnosis), the new one
+                        // takes its place. A crash before the second rename leaves no index at
+                        // `dir`, which starts a full rebuild: slow, but consistent.
+                        quarantine(dir, quarantine_dir)?;
+                        std::fs::rename(&new_dir, dir)?;
+                        tracing::info!(from = v, to = SCHEMA_VERSION, "index format upgraded");
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, from = v, "index upgrade failed; rebuilding");
+                        let _ = std::fs::remove_dir_all(&new_dir);
+                    }
+                }
+            }
+        }
         let version_ok = std::fs::read_to_string(dir.join(VERSION_FILE))
             .map(|v| v.trim() == SCHEMA_VERSION.to_string())
             .unwrap_or(false);
@@ -70,7 +108,7 @@ impl IndexStore {
         Ok((Self { index, fields, reader, writer: Mutex::new(writer), generation: AtomicU64::new(1) }, rebuilt))
     }
 
-    fn create(dir: &Path, schema: tantivy::schema::Schema) -> Result<Index> {
+    pub(crate) fn create(dir: &Path, schema: tantivy::schema::Schema) -> Result<Index> {
         std::fs::create_dir_all(dir)?;
         let settings = IndexSettings { docstore_compression: Compressor::Lz4, ..Default::default() };
         let index = Index::builder().schema(schema).settings(settings).open_or_create(MmapDirectory::open(dir).map_err(|e| Error::Other(e.to_string()))?)?;
