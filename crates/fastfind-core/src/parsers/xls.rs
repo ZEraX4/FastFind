@@ -5,6 +5,8 @@
 //! end of the file makes it allocate up to that offset, and a looping chain grows without end
 //! (found by fuzzing). So the workbook stream is read with the `cfb` crate, which validates
 //! the container, and calamine is given a freshly written container holding just that stream.
+//! calamine also panics on some malformed records (unchecked slicing); those panics are caught
+//! here and reported as a damaged file.
 
 use std::fs::File;
 use std::io::{Cursor, Read, Write};
@@ -36,7 +38,8 @@ impl DocumentParser for XlsParser {
     }
 
     fn extract(&self, path: &Path, _ctx: &ParseContext, sink: &mut TextSink) -> ParseResult<DocMeta> {
-        let mut wb: Xls<_> = Xls::new(clean_container(path)?).map_err(map_err)?;
+        let container = clean_container(path)?;
+        let mut wb: Xls<_> = guarded(|| Xls::new(container))?.map_err(map_err)?;
         let names = wb.sheet_names().to_vec();
         let meta = DocMeta { pages: Some(names.len() as u32), ..Default::default() };
         for name in names {
@@ -44,7 +47,7 @@ impl DocumentParser for XlsParser {
                 break;
             }
             sink.check_deadline()?;
-            let range = match wb.worksheet_range(&name) {
+            let range = match guarded(|| wb.worksheet_range(&name))? {
                 Ok(r) => r,
                 Err(e) => {
                     tracing::debug!(sheet = %name, error = %e, "xls sheet unreadable");
@@ -77,6 +80,11 @@ impl DocumentParser for XlsParser {
         }
         Ok(meta)
     }
+}
+
+/// Run calamine, turning a panic on malformed input into a parse error.
+fn guarded<T>(f: impl FnOnce() -> T) -> ParseResult<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|_| ParseError::Corrupt("damaged workbook".into()))
 }
 
 /// The workbook stream of `path`, re-packed in a well-formed compound file.
