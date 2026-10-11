@@ -9,6 +9,9 @@
 //! here and reported as a damaged file. And it reserves memory for every cell a sheet's
 //! DIMENSIONS record declares (up to 2^32 rows x 256 columns), so a crafted record asks for
 //! terabytes and the failed allocation aborts the process; those records are zeroed first.
+//! Finally calamine stores each sheet as a dense grid spanning its outermost cells, so cells at
+//! A1 and at the far corner of the 65,536 × 65,536 coordinate space ask for 137 GB; workbooks
+//! whose grid would exceed `MAX_SHEET_CELLS` are refused before calamine reads them.
 
 use std::fs::File;
 use std::io::{Cursor, Read, Write};
@@ -88,7 +91,8 @@ impl DocumentParser for XlsParser {
 /// "one cell at A1". calamine reads records from the start of the stream and from each sheet
 /// offset (BOUNDSHEET records), and a crafted offset may start mid-record, so every one of
 /// those record sequences is walked, again until nothing changes.
-fn neutralize_dimensions(stream: &mut [u8]) {
+/// Returns the offsets the record sequences were read from (the stream start and the sheets).
+fn neutralize_dimensions(stream: &mut [u8]) -> Vec<usize> {
     const DIMENSIONS: u16 = 0x0200;
     const BOUNDSHEET: u16 = 0x0085;
     let u16_at = |s: &[u8], i: usize| u16::from_le_bytes([s[i], s[i + 1]]);
@@ -119,6 +123,52 @@ fn neutralize_dimensions(stream: &mut [u8]) {
         starts.sort_unstable();
         starts.dedup();
     }
+    starts
+}
+
+/// A FILEPASS record in the workbook globals (before their EOF) means the file is encrypted.
+fn is_encrypted(stream: &[u8]) -> bool {
+    let mut i = 0;
+    while i + 4 <= stream.len() {
+        match u16::from_le_bytes([stream[i], stream[i + 1]]) {
+            0x002F => return true,
+            0x000A => return false,
+            _ => i += 4 + u16::from_le_bytes([stream[i + 2], stream[i + 3]]) as usize,
+        }
+    }
+    false
+}
+
+/// Largest dense grid calamine builds for one sheet (about 32 bytes per cell): 2^22 cells,
+/// for example 65,536 rows × 64 columns.
+const MAX_SHEET_CELLS: u64 = 1 << 22;
+
+/// Cells in the bounding box of the cell records calamine reads from `start` to the sheet's
+/// EOF record. Every cell record begins with its row and column; MULRK covers a run of columns.
+fn sheet_cells(stream: &[u8], start: usize) -> u64 {
+    let u16_at = |i: usize| stream.get(i..i + 2).map_or(0, |b| u16::from_le_bytes([b[0], b[1]]) as u64);
+    let (mut rows, mut cols) = ((u64::MAX, 0), (u64::MAX, 0));
+    let mut i = start;
+    while i + 4 <= stream.len() {
+        let (typ, len) = (u16_at(i), u16_at(i + 2) as usize);
+        let data = i + 4;
+        let last_col = match typ {
+            0x000A => break, // EOF
+            0x0203 | 0x0204 | 0x00D6 | 0x0205 | 0x027E | 0x00FD | 0x0006 if len >= 4 => Some(u16_at(data + 2)),
+            0x00BD if len >= 6 => Some(u16_at(data + 2) + ((len as u64 - 6) / 6).saturating_sub(1)),
+            _ => None,
+        };
+        if let Some(last) = last_col {
+            let (row, first) = (u16_at(data), u16_at(data + 2));
+            rows = (rows.0.min(row), rows.1.max(row));
+            cols = (cols.0.min(first), cols.1.max(last));
+        }
+        i = data + len;
+    }
+    if rows.0 == u64::MAX {
+        return 0;
+    }
+    (rows.1 - rows.0 + 1) * (cols.1 - cols.0 + 1)
 }
 
 /// Run calamine, turning a panic on malformed input into a parse error.
@@ -135,7 +185,15 @@ fn clean_container(path: &Path) -> ParseResult<Cursor<Vec<u8>>> {
         .ok_or_else(|| ParseError::Corrupt("no Workbook stream".into()))?;
     let mut data = Vec::new();
     src.open_stream(name)?.read_to_end(&mut data)?;
-    neutralize_dimensions(&mut data);
+    if is_encrypted(&data) {
+        // Record contents are encrypted from here on; calamine reports it too, but the cell
+        // coordinates below would be noise.
+        return Err(ParseError::Encrypted);
+    }
+    let sheets = neutralize_dimensions(&mut data);
+    if let Some(cells) = sheets.iter().map(|&start| sheet_cells(&data, start)).max().filter(|&n| n > MAX_SHEET_CELLS) {
+        return Err(ParseError::LimitExceeded(format!("a sheet spans {cells} cells")));
+    }
     // Version 3 (512-byte sectors), as Excel writes it; calamine rejects a version 4 file
     // whose root has no mini stream.
     let mut out = cfb::CompoundFile::create_with_version(cfb::Version::V3, Cursor::new(Vec::new()))?;
@@ -163,6 +221,26 @@ mod tests {
         v.extend_from_slice(&(data.len() as u16).to_le_bytes());
         v.extend_from_slice(data);
         v
+    }
+
+    #[test]
+    fn sheet_size_is_the_bounding_box_of_its_cells() {
+        let cell = |typ: u16, row: u16, col: u16, extra: &[u8]| {
+            let mut d = row.to_le_bytes().to_vec();
+            d.extend_from_slice(&col.to_le_bytes());
+            d.extend_from_slice(extra);
+            rec(typ, &d)
+        };
+        let mut s = rec(0x0809, &[0; 4]);
+        s.extend(cell(0x0203, 2, 1, &[0; 10])); // NUMBER at B3
+        s.extend(cell(0x00BD, 9, 0, &[0; 6 * 4 + 2])); // MULRK A10:D10
+        s.extend(rec(0x000A, &[]));
+        s.extend(cell(0x0203, 60_000, 200, &[0; 10])); // after EOF: another sheet's
+        assert_eq!(sheet_cells(&s, 0), 8 * 4, "rows 3-10, columns A-D");
+        let mut far = rec(0x0809, &[0; 4]);
+        far.extend(cell(0x00FD, 0, 0, &[0; 6]));
+        far.extend(cell(0x0203, 65_535, 65_535, &[0; 10]));
+        assert!(sheet_cells(&far, 0) > MAX_SHEET_CELLS);
     }
 
     #[test]
