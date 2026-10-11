@@ -6,6 +6,11 @@
   indexes are now rebuilt from the text FastFind already stored, instead of reading every file
   again. Recognised (OCR) text is kept, so scans are never recognised a second time. Only
   plain-text files and a few very large documents are read again.
+* **Fixed (found by fuzzing):** crafted `.xls` files could make FastFind try to allocate
+  gigabytes or terabytes of memory, which can close the app: through the file's container, or
+  through a sheet's declared size, or by placing two cells far apart. The workbook is now read
+  from a validated copy with the size hints removed, and a sheet that would need more than about
+  4 million cells of memory is indexed by name only. An HTML file ending inside an unclosed tag could fail to index.
 * **Zip archives.** Files inside `.zip` archives are found by name and by content: text files
   (in any encoding), Office documents, PDFs, e-mails and archives inside the archive. Results
   say where: *Page 2 · In archive: reports/annual.pdf*. Images and other unreadable files are
