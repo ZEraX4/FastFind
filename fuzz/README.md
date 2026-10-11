@@ -36,8 +36,9 @@ cargo +nightly fuzz run rtf corpus/rtf -- -max_total_time=300 -timeout=30
 ```
 
 A finding is saved under `artifacts/<target>/`. Reproduce it with
-`cargo +nightly fuzz run <target> artifacts/<target>/<file>`, fix the reader, and add the input
-as a regression test next to the reader's unit tests.
+`cargo +nightly fuzz run <target> artifacts/<target>/<file>`, fix the reader, and copy the input
+into `crates/fastfind-core/tests/regressions/` with the reader's extension. `tests/regressions.rs`
+parses every file there on every CI run, with an allocator that fails any allocation over 256 MB.
 
 CI (`.github/workflows/fuzz.yml`) runs every target for 2 minutes on pull requests that touch
 the parsers, for 10 minutes each week, and for as long as you like from *Actions → Fuzz → Run
