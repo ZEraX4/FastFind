@@ -548,7 +548,10 @@ fn an_older_index_format_is_rebuilt_from_stored_text_without_reparsing() {
     assert!(wait_for(Duration::from_secs(60), || search(&e, "platypus") == ["notes.txt"] && search(&e, "quoll") == ["page.html"]));
     assert_eq!(search(&e, "kookaburra"), ["report.docx"], "not parsed again");
     assert_eq!(e.status().unwrap().failed, 0);
+    e.shutdown();
+}
 
+#[test]
 fn zip_archives_are_searchable_by_entry_name_and_content() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("archives");
