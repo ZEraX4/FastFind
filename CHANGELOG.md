@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-10-11
 
 * **Arabic search.** Spelling variants now find each other: `أ إ آ ٱ` = `ا`, `ة` = `ه`,
   `ى` = `ي`, Persian `ی` and `ک`, tatweel (`كتـــاب`) and harakat are ignored, and Arabic-Indic
