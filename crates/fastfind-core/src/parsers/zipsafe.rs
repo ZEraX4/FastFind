@@ -19,12 +19,30 @@ pub struct SafeZip {
 
 impl SafeZip {
     pub fn open(path: &Path, limits: &Limits) -> ParseResult<Self> {
-        let f = BufReader::new(File::open(path)?);
-        let archive = ZipArchive::new(f)?;
-        if archive.len() > limits.max_zip_entries {
-            return Err(ParseError::LimitExceeded(format!("{} zip entries", archive.len())));
+        let z = Self::open_any_size(path, limits)?;
+        if z.len() > limits.max_zip_entries {
+            return Err(ParseError::LimitExceeded(format!("{} zip entries", z.len())));
         }
+        Ok(z)
+    }
+
+    /// Open without the entry-count limit, for callers that read only some entries.
+    pub fn open_any_size(path: &Path, limits: &Limits) -> ParseResult<Self> {
+        let archive = ZipArchive::new(BufReader::new(File::open(path)?))?;
         Ok(Self { archive, budget: limits.max_zip_bytes, max_ratio: limits.max_zip_ratio })
+    }
+
+    pub fn len(&self) -> usize {
+        self.archive.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.archive.len() == 0
+    }
+
+    /// Entry name by position, in archive order.
+    pub fn name_at(&self, index: usize) -> Option<&str> {
+        self.archive.name_for_index(index)
     }
 
     pub fn names(&self) -> Vec<String> {
@@ -39,7 +57,13 @@ impl SafeZip {
     /// enforces the budget on bytes actually produced (declared sizes can lie).
     pub fn open_entry(&mut self, name: &str) -> ParseResult<Option<BoundedRead<'_>>> {
         let Some(idx) = self.archive.index_for_name(name) else { return Ok(None) };
+        self.open_index(idx).map(Some)
+    }
+
+    /// Like `open_entry`, by position.
+    pub fn open_index(&mut self, idx: usize) -> ParseResult<BoundedRead<'_>> {
         let entry = self.archive.by_index(idx)?;
+        let name = entry.name().to_string();
         if entry.encrypted() {
             return Err(ParseError::Encrypted);
         }
@@ -51,7 +75,7 @@ impl SafeZip {
         if size > self.budget {
             return Err(ParseError::LimitExceeded(format!("{name} expands to {size} bytes")));
         }
-        Ok(Some(BoundedRead { inner: entry, remaining: &mut self.budget }))
+        Ok(BoundedRead { inner: entry, remaining: &mut self.budget })
     }
 
     /// Read a (small) entry fully, bounded by `max` bytes.

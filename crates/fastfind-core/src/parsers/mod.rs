@@ -6,8 +6,10 @@
 //! nesting and decompression are bounded, and the pipeline additionally isolates each call
 //! with `catch_unwind`.
 
+pub mod archive;
 pub mod doc;
 pub mod email;
+pub mod embedded;
 pub mod epub;
 pub mod html;
 pub mod json;
@@ -199,6 +201,8 @@ pub struct Limits {
     pub max_pdf_pages: u32,
     /// Max nesting depth for recursive formats (RTF groups, PPT records).
     pub max_depth: usize,
+    /// How many containers (archives, e-mails) the document being parsed is inside.
+    pub container_depth: usize,
 }
 
 impl Default for Limits {
@@ -211,6 +215,7 @@ impl Default for Limits {
             max_zip_ratio: 250,
             max_pdf_pages: 20_000,
             max_depth: 512,
+            container_depth: 0,
         }
     }
 }

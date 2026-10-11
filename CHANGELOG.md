@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* **Zip archives.** Files inside `.zip` archives are found by name and by content: text files
+  (in any encoding), Office documents, PDFs, e-mails and archives inside the archive. Results
+  say where: *Page 2 · In archive: reports/annual.pdf*. Images and other unreadable files are
+  found by name. Archives are read with the same zip-bomb protections as Office files, and
+  containers inside containers (a zip in an e-mail in a zip) are opened at most 4 levels deep.
 * **Outlook messages.** `.msg` files saved from Outlook are searchable like `.eml`: sender,
   recipients, date and subject, the body (plain text, HTML or Outlook's compressed RTF), and
   attachments, including attached Outlook items. Results say where: *Attachment: report.pdf*.
