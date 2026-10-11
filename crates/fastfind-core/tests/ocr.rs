@@ -3,7 +3,8 @@
 //! Test documents are genuine "scans": a text PDF is rendered to pixels with PDFium, and those
 //! pixels are wrapped in an image-only PDF (or saved as a PNG) — no text layer, exactly like a
 //! document scanner's output. Tests are skipped (with a message) when Tesseract or PDFium is not
-//! installed, so CI without them still passes.
+//! installed, unless `FASTFIND_REQUIRE_OCR` is set (as in CI), which turns a missing tool into
+//! a failure so the tests can't silently stop running.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -23,12 +24,16 @@ fn pdfium_dir() -> PathBuf {
 
 /// Tesseract + PDFium, or `None` (test skipped).
 fn tools() -> Option<PathBuf> {
+    let skip = |what: &str| {
+        assert!(std::env::var_os("FASTFIND_REQUIRE_OCR").is_none(), "{what} not available, and FASTFIND_REQUIRE_OCR is set");
+        eprintln!("{what} not available — skipping OCR test");
+    };
     let Some(t) = ocr::find_tesseract("") else {
-        eprintln!("Tesseract not installed — skipping OCR test");
+        skip("Tesseract");
         return None;
     };
     if pdf::init(&[pdfium_dir()]).pdfium().is_none() {
-        eprintln!("PDFium not available — skipping OCR test");
+        skip("PDFium");
         return None;
     }
     Some(t)

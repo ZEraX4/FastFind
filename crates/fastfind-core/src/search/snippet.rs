@@ -4,7 +4,7 @@ use std::ops::ControlFlow;
 
 use super::matcher::Highlighter;
 use crate::model::{Snippet, SnippetResult};
-use crate::textsource::TextSource;
+use crate::textsource::{ChunkPos, TextSource};
 use crate::util::{ceil_char_boundary, floor_char_boundary, utf16_len};
 
 /// How much of a streamed plain-text file is scanned for snippets and match counts.
@@ -67,6 +67,24 @@ pub fn excerpt(text: &str, mut start: usize, mut end: usize, matches: &[(usize, 
     (out, hl)
 }
 
+/// Up to `limit` matches in `chunk`, leaving out those the previous chunk already reported.
+pub fn new_matches(hl: &dyn Highlighter, chunk: &str, pos: ChunkPos, out: &mut Vec<(usize, usize)>, limit: usize) {
+    let mut want = limit;
+    loop {
+        out.clear();
+        hl.find(chunk, out, want);
+        let full = out.len() >= want;
+        let before = out.len();
+        out.retain(|&(_, e)| !pos.seen(e));
+        let repeated = before - out.len();
+        if !full || out.len() >= limit || want == limit + repeated {
+            break;
+        }
+        want = limit + repeated;
+    }
+    out.truncate(limit);
+}
+
 /// Build result-list snippets and a (capped) match count.
 pub fn snippets(path: &str, source: &TextSource, hl: &dyn Highlighter, opt: &SnippetOptions) -> SnippetResult {
     let mut res = SnippetResult { path: path.to_string(), ..Default::default() };
@@ -83,9 +101,8 @@ pub fn snippets(path: &str, source: &TextSource, hl: &dyn Highlighter, opt: &Sni
             let (t, _) = excerpt(chunk, 0, HEAD_BYTES.min(chunk.len()), &[]);
             head = Some(t);
         }
-        buf.clear();
         let room = (opt.count_cap - count) as usize + 1;
-        hl.find(chunk, &mut buf, room);
+        new_matches(hl, chunk, pos, &mut buf, room);
         let mut i = 0;
         while i < buf.len() && res.snippets.len() < opt.max_snippets {
             let (s, e) = buf[i];
