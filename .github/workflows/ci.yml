@@ -38,7 +38,7 @@ jobs:
         # The Chocolatey feed sometimes times out, and choco then reports success with nothing
         # installed: retry, and fail here rather than in the OCR tests.
         run: |
-          $exe = "C:\Program Files\Tesseract-OCR	esseract.exe"
+          $exe = "C:/Program Files/Tesseract-OCR/tesseract.exe"
           for ($i = 1; $i -le 4 -and -not (Test-Path $exe); $i++) {
             if ($i -gt 1) { Start-Sleep -Seconds (20 * $i) }
             choco install tesseract -y --no-progress
