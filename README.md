@@ -230,8 +230,13 @@ GitHub release. Installed copies only see a release after you publish the draft.
    `CHANGELOG.md` entry.
 2. Commit, then tag and push: `git tag -a v1.1.0 -m "FastFind 1.1.0"` and
    `git push origin main v1.1.0`.
-3. Check the draft's assets, paste the changelog entry as the release notes (the update banner
-   shows them under *What's new*) and publish.
+3. Wait for the *Check update signatures* job. It verifies every package in the draft's
+   `latest.json` against the public key in `tauri.conf.json`, the way installed copies will,
+   and checks that all platforms are present and signed for the tagged version. If it fails,
+   don't publish. To re-run it by hand: `python scripts/verify-release.py v1.1.0` (needs the
+   GitHub CLI and `pip install cryptography`).
+4. Paste the changelog entry as the release notes (the update banner shows them under
+   *What's new*) and publish.
 
 **Update signing key (one-time setup).** Updates are verified with a key pair that only you hold.
 Generate it once, outside the repository:

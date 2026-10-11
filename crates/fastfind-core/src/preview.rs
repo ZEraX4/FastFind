@@ -5,7 +5,7 @@ use std::ops::ControlFlow;
 
 use crate::model::{flags, Preview, PreviewSection};
 use crate::search::matcher::Highlighter;
-use crate::search::snippet::{excerpt, STREAM_SCAN_BYTES};
+use crate::search::snippet::{excerpt, new_matches, STREAM_SCAN_BYTES};
 use crate::textsource::TextSource;
 
 pub const MAX_PREVIEW_MATCHES: usize = 500;
@@ -28,8 +28,7 @@ pub fn build(p: &mut Preview, source: &TextSource, hl: &dyn Highlighter) {
             let (t, _) = excerpt(chunk, 0, HEAD_BYTES.min(chunk.len()), &[]);
             p.head = Some(t);
         }
-        buf.clear();
-        hl.find(chunk, &mut buf, MAX_PREVIEW_MATCHES + 1 - total);
+        new_matches(hl, chunk, pos, &mut buf, MAX_PREVIEW_MATCHES + 1 - total);
         let mut i = 0;
         while i < buf.len() {
             if total >= MAX_PREVIEW_MATCHES {

@@ -32,6 +32,9 @@ jobs:
       - name: Tesseract for OCR tests (macOS)
         if: runner.os == 'macOS'
         run: brew install tesseract
+      - name: Tesseract for OCR tests (Windows)
+        if: runner.os == 'Windows'
+        run: choco install tesseract -y --no-progress
       - name: Fetch PDFium (Windows)
         if: runner.os == 'Windows'
         run: pwsh scripts/fetch-pdfium.ps1
@@ -45,8 +48,11 @@ jobs:
           npm test
       - name: Build UI
         run: npx vite build
-      - name: Rust tests (engine, parsers, integration, fixtures, PDF)
+      - name: Rust tests (engine, parsers, integration, fixtures, PDF, OCR)
         run: cargo test --workspace --locked
+        env:
+          # Fail instead of skipping the OCR tests if Tesseract or PDFium is missing.
+          FASTFIND_REQUIRE_OCR: "1"
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 

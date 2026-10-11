@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+* **Fixed:** in large text files (logs, CSV, code), an Exact or Regex match, or a phrase, that
+  ran across the boundary between two 256 KB pieces of the file was missed. Pieces now
+  overlap, and a match is counted once.
+* **Releases:** a CI job checks every update package in the draft release against the update
+  key, as installed copies will, before it is published (`scripts/verify-release.py`).
+* **CI:** OCR tests now run on Windows too, and fail instead of being skipped if Tesseract is
+  missing.
+
 ## 1.2.0 — 2026-10-11
 
 * **Arabic search.** Spelling variants now find each other: `أ إ آ ٱ` = `ا`, `ة` = `ه`,
