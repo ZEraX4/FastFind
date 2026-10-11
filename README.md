@@ -11,7 +11,8 @@ request it ever makes is an optional, opt-in update check.
 
 * **Formats:** TXT, Markdown, CSV/TSV, logs, 150+ source/config types, HTML, XML, JSON, RTF,
   **DOC, DOCX, XLS, XLSX, PPT, PPTX**, ODT/ODS/ODP, EPUB, **PDF** (via PDFium) and e-mail
-  (**EML** and Outlook **MSG**, including attachments). Scanned PDFs, and scanned pages inside
+  (**EML** and Outlook **MSG**, including attachments), and **ZIP** archives (the names and
+  contents of the files inside, nested archives included). Scanned PDFs, and scanned pages inside
   typed PDFs, are detected and can be OCR'd with a local Tesseract.
 * **Languages:** accents are ignored (`Café` = `cafe`, `Geçiş` = `gecis`), and Arabic is
   normalized: `أ إ آ` = `ا`, `ة` = `ه`, `ى` = `ي`, tatweel and harakat are ignored, Arabic-Indic

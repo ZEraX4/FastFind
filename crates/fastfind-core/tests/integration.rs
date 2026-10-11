@@ -506,3 +506,45 @@ Content-Transfer-Encoding: base64\r\n\r\n{}\r\n\
     assert_eq!(e.status().unwrap().failed, 0);
     e.shutdown();
 }
+
+#[test]
+fn zip_archives_are_searchable_by_entry_name_and_content() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("archives");
+    fs::create_dir_all(&root).unwrap();
+    let docx = tmp.path().join("a.docx");
+    write_docx(&docx, "Budget", &["The cassowary budget line was approved.".into()]).unwrap();
+    let pdf = tmp.path().join("a.pdf");
+    write_pdf(&pdf, "Report", &[vec!["First page.".into()], vec!["Second page mentions the dugong.".into()]]).unwrap();
+    let eml = "From: a@example.com\r\nSubject: Hello\r\nContent-Type: text/plain\r\n\r\nThe tapir meeting moved.\r\n";
+
+    let mut w = zip::ZipWriter::new(fs::File::create(root.join("bundle.zip")).unwrap());
+    let opts = zip::write::SimpleFileOptions::default();
+    for (name, data) in [
+        ("reports/budget.docx", fs::read(&docx).unwrap()),
+        ("reports/annual.pdf", fs::read(&pdf).unwrap()),
+        ("mail/hello.eml", eml.as_bytes().to_vec()),
+        ("scans/okapi-receipt.jpg", b"\xff\xd8\xff\xe0 binary".to_vec()),
+    ] {
+        w.start_file(name, opts).unwrap();
+        w.write_all(&data).unwrap();
+    }
+    w.finish().unwrap();
+    fs::write(root.join("broken.zip"), b"PK\x03\x04 truncated").unwrap();
+
+    let e = open(&tmp.path().join("data"), false);
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(120)));
+
+    for word in ["cassowary", "dugong", "tapir", "okapi"] {
+        assert_eq!(search(&e, word), ["bundle.zip"], "{word}");
+    }
+    let path = e.search(&SearchRequest::new("dugong"), &CancelToken::new()).unwrap().items.remove(0).path;
+    let loc = |q: &str| e.snippets(&SearchRequest::new(q), std::slice::from_ref(&path)).unwrap().remove(0).snippets[0].location.clone();
+    assert_eq!(loc("dugong").as_deref(), Some("Page 2 · In archive: reports/annual.pdf"));
+    assert_eq!(loc("cassowary").as_deref(), Some("≈ Page 1 · In archive: reports/budget.docx"));
+    assert_eq!(loc("tapir").as_deref(), Some("In archive: mail/hello.eml"));
+    assert_eq!(loc("okapi").as_deref(), Some("In archive: scans/okapi-receipt.jpg"));
+    assert_eq!(e.status().unwrap().failed, 1, "the damaged archive fails on its own");
+    e.shutdown();
+}

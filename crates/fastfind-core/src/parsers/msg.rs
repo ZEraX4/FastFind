@@ -16,14 +16,14 @@ use std::path::Path;
 
 use encoding_rs::{Encoding, WINDOWS_1252};
 
-use super::email::{begin_part, extract_attachment, MAX_ATTACHMENT_BYTES, MAX_NESTING};
+use super::embedded::{begin_part, extract_embedded, MAX_EMBEDDED_BYTES, MAX_NESTING};
 use super::html::{decode_html_bytes, html_to_text};
 use super::rtf::{codepage, rtf_to_text};
 use super::sniff::{sniff, Sniffed};
 use super::{DocMeta, DocumentParser, Limits, ParseContext, ParseError, ParseResult, TextMode, TextSink};
 
 /// Bodies and attachments larger than this are not read.
-const MAX_PROPERTY_BYTES: u64 = MAX_ATTACHMENT_BYTES as u64;
+const MAX_PROPERTY_BYTES: u64 = MAX_EMBEDDED_BYTES as u64;
 
 // Property IDs.
 const SUBJECT: u16 = 0x0037;
@@ -245,7 +245,7 @@ fn emit_message<F: Read + Seek>(msg: &mut Store<F>, header: usize, limits: &Limi
         msg.enter(&a, |m| -> ParseResult<()> {
             let inner = "__substg1.0_3701000D";
             if m.long(CHILD_HEADER, ATTACH_METHOD) == Some(ATTACH_EMBEDDED_MSG) || m.comp.is_storage(format!("{}/{inner}", m.path)) {
-                if depth < MAX_NESTING {
+                if limits.container_depth + depth < MAX_NESTING {
                     m.enter(inner, |m| {
                         m.enc = m.codepage(EMBEDDED_HEADER);
                         let label = m.string(SUBJECT).map(|s| format!("Attached message: {s}")).unwrap_or_else(|| "Attached message".into());
@@ -257,7 +257,7 @@ fn emit_message<F: Read + Seek>(msg: &mut Store<F>, header: usize, limits: &Limi
             }
             let name = [ATTACH_LONG_FILENAME, ATTACH_FILENAME, DISPLAY_NAME].into_iter().find_map(|id| m.string(id).filter(|n| !n.trim().is_empty()));
             if let (Some(name), Some(data)) = (name, m.binary(ATTACH_DATA)) {
-                extract_attachment(&name, &data, format!("Attachment: {name}"), limits, sink, depth)?;
+                extract_embedded(&name, &data, format!("Attachment: {name}"), limits, sink)?;
             }
             Ok(())
         })?;
@@ -271,7 +271,7 @@ const RTF_PREBUF: &[u8] = b"{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f
 /// Decompress an RTF body ([MS-OXRTFCP]). `None` if the header is not recognised.
 fn decompress_rtf(data: &[u8]) -> Option<Vec<u8>> {
     let u32_at = |o: usize| data.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let raw_size = (u32_at(4)? as usize).min(MAX_ATTACHMENT_BYTES);
+    let raw_size = (u32_at(4)? as usize).min(MAX_EMBEDDED_BYTES);
     let body = data.get(16..)?;
     match data.get(8..12)? {
         b"MELA" => return Some(body[..raw_size.min(body.len())].to_vec()),
