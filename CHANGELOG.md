@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.1 — 2026-10-12
 
 * **Zip file names in Turkish, Arabic and other languages.** Zips made by Windows' built-in
   *Compressed folder* (before Windows 11) and many older tools store file names in the PC's
