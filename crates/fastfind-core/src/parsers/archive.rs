@@ -9,6 +9,11 @@
 //! Decompression goes through `SafeZip`: the archive's total output is bounded, entries with
 //! bomb-like compression ratios are refused, and nothing is written outside a private
 //! temporary folder. Encrypted entries keep only their name.
+//!
+//! Names: zips made by Windows' "Compressed folder" (before Windows 11) and many older tools
+//! store names in the PC's DOS code page (CP857 on Turkish Windows, CP720 on Arabic) without
+//! saying so, and the zip crate then decodes them as CP437, garbling them. Like Explorer, names
+//! that are not valid UTF-8 are decoded with the system's OEM code page on Windows.
 
 use std::io::Read;
 use std::path::Path;
@@ -49,7 +54,8 @@ impl DocumentParser for ZipParser {
                 break;
             }
             sink.check_deadline()?;
-            let Some(name) = zip.name_at(i).map(str::to_string) else { continue };
+            let Some(decoded) = zip.name_at(i).map(str::to_string) else { continue };
+            let name = zip.raw_name_at(i).and_then(|raw| better_name(&raw)).unwrap_or(decoded);
             if name.ends_with('/') {
                 continue;
             }
@@ -79,6 +85,51 @@ impl DocumentParser for ZipParser {
         }
         Ok(DocMeta::default())
     }
+}
+
+/// A better reading of an entry name than the zip crate's CP437 fallback, if there is one: the
+/// bytes as UTF-8 when they are valid UTF-8, otherwise (on Windows) the OEM code page.
+fn better_name(raw: &[u8]) -> Option<String> {
+    if raw.is_ascii() {
+        return None;
+    }
+    if let Ok(s) = std::str::from_utf8(raw) {
+        return Some(s.to_string());
+    }
+    decode_codepage(raw, oem_codepage()?)
+}
+
+#[cfg(windows)]
+fn oem_codepage() -> Option<u32> {
+    // SAFETY: no arguments, no side effects.
+    Some(unsafe { windows_sys::Win32::Globalization::GetOEMCP() })
+}
+
+#[cfg(not(windows))]
+fn oem_codepage() -> Option<u32> {
+    None
+}
+
+#[cfg(windows)]
+fn decode_codepage(bytes: &[u8], codepage: u32) -> Option<String> {
+    use windows_sys::Win32::Globalization::{MultiByteToWideChar, MB_ERR_INVALID_CHARS};
+    let len = i32::try_from(bytes.len()).ok()?;
+    // SAFETY: the input pointer and length describe `bytes`; the output buffer is sized by
+    // the first call, which only measures.
+    unsafe {
+        let n = MultiByteToWideChar(codepage, MB_ERR_INVALID_CHARS, bytes.as_ptr(), len, std::ptr::null_mut(), 0);
+        if n <= 0 {
+            return None;
+        }
+        let mut wide = vec![0u16; n as usize];
+        let written = MultiByteToWideChar(codepage, MB_ERR_INVALID_CHARS, bytes.as_ptr(), len, wide.as_mut_ptr(), n);
+        (written == n).then(|| String::from_utf16_lossy(&wide))
+    }
+}
+
+#[cfg(not(windows))]
+fn decode_codepage(_: &[u8], _: u32) -> Option<String> {
+    None
 }
 
 fn read_entry(zip: &mut SafeZip, index: usize) -> Option<Vec<u8>> {
@@ -140,6 +191,24 @@ mod tests {
         assert_eq!(location(&text, &locs, "photo.jpg").as_deref(), Some("In archive: photo.jpg"), "names of unreadable files are indexed");
         assert!(!text.contains("not really"));
         assert_eq!(location(&text, &locs, "narwhal").as_deref(), Some("In archive: deep/notes.md · In archive: nested.zip"));
+    }
+
+    #[test]
+    fn utf8_names_are_kept_even_without_the_utf8_flag() {
+        assert_eq!(better_name("Geçiş izni.txt".as_bytes()).as_deref(), Some("Geçiş izni.txt"));
+        assert_eq!(better_name("تقرير.pdf".as_bytes()).as_deref(), Some("تقرير.pdf"));
+        assert_eq!(better_name(b"plain.txt"), None, "ASCII: the zip crate's reading is right");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn dos_code_page_names_decode_like_explorer() {
+        // "Geçiş izni.txt" as Turkish Windows' Compressed folder stores it (CP857).
+        let cp857 = b"Ge\x87i\x9f izni.txt";
+        assert_eq!(decode_codepage(cp857, 857).as_deref(), Some("Geçiş izni.txt"));
+        // "Café" in CP850 (Western Europe).
+        assert_eq!(decode_codepage(b"Caf\x82", 850).as_deref(), Some("Café"));
+        assert!(better_name(cp857).is_some(), "not UTF-8, so the OEM code page is used");
     }
 
     #[test]

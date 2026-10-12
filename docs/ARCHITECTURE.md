@@ -190,7 +190,10 @@ Location anchors recorded during extraction map a byte offset to `Page 3`, `≈ 
 nothing is recognised again, so OCR text survives (even when its stored copy was cut at the
 store limit). Files without stored text (plain text and other raw files, re-parsed formats,
 and documents whose stored text was cut) are marked changed in the catalog and read by the
-startup scan. The new index replaces the old one only when complete; an interrupted upgrade
+startup scan. The desktop app checks `IndexStore::upgrade_pending` first and, if so, opens the
+engine on a thread behind a small progress window (`ui/public/splash.html`); the main window is
+created (`"create": false` in `tauri.conf.json`) once the engine is ready. The new index replaces
+the old one only when complete; an interrupted upgrade
 starts again from the untouched old index. If the upgrade fails, the old index is quarantined
 and everything is indexed again, as before. The catalog's own format (`CATALOG_VERSION`) has
 not changed since 1.0; a future change should add an SQL migration rather than bump it, since

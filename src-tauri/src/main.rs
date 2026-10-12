@@ -8,10 +8,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use fastfind_core::config::AppPaths;
+use fastfind_core::index::IndexStore;
 use fastfind_core::parsers::pdfworker;
 use fastfind_core::{Engine, EngineOptions};
 use parking_lot::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub struct AppState {
     pub engine: Arc<Engine>,
@@ -42,46 +43,27 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateState::default())
         .setup(move |app| {
-            let t0 = Instant::now();
-            tracing::info!("window runtime ready; opening engine");
-            let res = app.path().resource_dir().ok();
-            let mut pdfium_dirs = Vec::new();
-            if let Some(r) = &res {
-                pdfium_dirs.push(r.join("pdfium"));
-                pdfium_dirs.push(r.clone());
-            }
-            let opts = EngineOptions {
-                pdfium_dirs,
-                watch: true,
-                scan_on_start: true,
-                pdf_worker_exe: std::env::current_exe().ok(),
+            // Once after some updates, opening the engine upgrades the index format (seconds per
+            // 100,000 files). The event loop only runs after `setup` returns, so the engine opens
+            // on a thread, a small progress window is shown meanwhile, and the main window (whose
+            // UI calls commands immediately) is created once the engine is ready.
+            let splash = if IndexStore::upgrade_pending(&paths.index_dir) {
+                tracing::info!("index format upgrade pending; showing the progress window");
+                WebviewWindowBuilder::new(app, "splash", WebviewUrl::App("splash.html".into()))
+                    .title("FastFind")
+                    .inner_size(440.0, 170.0)
+                    .resizable(false)
+                    .decorations(false)
+                    .closable(false)
+                    .center()
+                    .build()
+                    .map_err(|e| tracing::warn!(error = %e, "cannot show the progress window"))
+                    .ok()
+            } else {
+                None
             };
-            let engine = match Engine::open(paths.clone(), opts) {
-                Ok(e) => e,
-                Err(e) => {
-                    tracing::error!(error = %e, "cannot open index");
-                    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
-                    app.dialog()
-                        .message(format!("FastFind could not open its index:\n\n{e}\n\nData folder: {}", paths.data_dir.display()))
-                        .title("FastFind")
-                        .kind(MessageDialogKind::Error)
-                        .blocking_show();
-                    std::process::exit(1);
-                }
-            };
-            // Tell the UI when newly indexed files become searchable (throttled).
-            let handle = app.handle().clone();
-            let last = Mutex::new(Instant::now() - Duration::from_secs(10));
-            engine.index.add_listener(move |generation| {
-                let mut l = last.lock();
-                if l.elapsed() >= Duration::from_millis(1500) {
-                    *l = Instant::now();
-                    let _ = handle.emit("index-updated", generation);
-                }
-            });
-            app.manage(AppState { engine, search_cancel: Mutex::new(Default::default()) });
-            updates::spawn_auto_check(app.handle().clone());
-            tracing::info!(ms = t0.elapsed().as_millis() as u64, "engine ready");
+            let (handle, paths) = (app.handle().clone(), paths.clone());
+            std::thread::Builder::new().name("ff-open".into()).spawn(move || open_engine(handle, paths, splash))?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -122,4 +104,56 @@ fn main() {
             tracing::info!("FastFind exited");
         }
     });
+}
+
+/// Open the engine, make it available to commands, then show the main window.
+fn open_engine(handle: AppHandle, paths: AppPaths, splash: Option<WebviewWindow>) {
+    let t0 = Instant::now();
+    tracing::info!("window runtime ready; opening engine");
+    let res = handle.path().resource_dir().ok();
+    let mut pdfium_dirs = Vec::new();
+    if let Some(r) = &res {
+        pdfium_dirs.push(r.join("pdfium"));
+        pdfium_dirs.push(r.clone());
+    }
+    let opts = EngineOptions { pdfium_dirs, watch: true, scan_on_start: true, pdf_worker_exe: std::env::current_exe().ok() };
+    let engine = match Engine::open(paths.clone(), opts) {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::error!(error = %e, "cannot open index");
+            use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+            handle
+                .dialog()
+                .message(format!("FastFind could not open its index:\n\n{e}\n\nData folder: {}", paths.data_dir.display()))
+                .title("FastFind")
+                .kind(MessageDialogKind::Error)
+                .blocking_show();
+            std::process::exit(1);
+        }
+    };
+    // Tell the UI when newly indexed files become searchable (throttled).
+    let emitter = handle.clone();
+    let last = Mutex::new(Instant::now() - Duration::from_secs(10));
+    engine.index.add_listener(move |generation| {
+        let mut l = last.lock();
+        if l.elapsed() >= Duration::from_millis(1500) {
+            *l = Instant::now();
+            let _ = emitter.emit("index-updated", generation);
+        }
+    });
+    handle.manage(AppState { engine, search_cancel: Mutex::new(Default::default()) });
+    updates::spawn_auto_check(handle.clone());
+    tracing::info!(ms = t0.elapsed().as_millis() as u64, "engine ready");
+
+    // The main window is declared in tauri.conf.json with "create": false.
+    let window = handle.config().app.windows.iter().find(|w| w.label == "main").cloned();
+    match window.map(|cfg| WebviewWindowBuilder::from_config(&handle, &cfg).and_then(|b| b.build())) {
+        Some(Ok(_)) => {}
+        Some(Err(e)) => tracing::error!(error = %e, "cannot create the main window"),
+        None => tracing::error!("no main window in the configuration"),
+    }
+    // After the main window exists, so closing it never leaves the app without windows.
+    if let Some(s) = splash {
+        let _ = s.destroy();
+    }
 }
