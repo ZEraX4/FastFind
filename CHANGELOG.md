@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 — 2026-10-12
 
 * **Faster file-name search.** `filename:`, the *File name* mode and the file-name part of
   regex searches no longer walk every name in the index: about 1 ms instead of 19 ms at
