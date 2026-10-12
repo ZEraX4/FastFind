@@ -93,6 +93,8 @@ impl ParserRegistry {
     /// All extensions with a dedicated parser (for the settings UI).
     pub fn supported_extensions(&self) -> Vec<&'static str> {
         let mut v: Vec<_> = self.by_ext.keys().copied().collect();
+        // Outlook archives are read by the indexer itself (one result per e-mail).
+        v.push("pst");
         v.sort_unstable();
         v
     }
@@ -140,7 +142,7 @@ pub fn kind_for_ext(ext: &str) -> Kind {
         "json" | "jsonl" | "ndjson" | "geojson" | "har" | "xml" | "xsd" | "xsl" | "xslt" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf" | "config" | "properties" | "plist" | "rss" | "atom" | "kml" | "gpx" | "svg" | "sql" | "env" | "reg" => Kind::Data,
         "epub" | "fb2" | "mobi" | "azw" | "azw3" => Kind::Ebook,
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" | "webp" | "heic" | "heif" | "ico" | "psd" | "raw" | "cr2" | "nef" | "dng" => Kind::Image,
-        "txt" | "text" | "md" | "markdown" | "mdown" | "rst" | "adoc" | "asciidoc" | "org" | "tex" | "bib" | "log" | "nfo" | "srt" | "vtt" | "eml" | "msg" | "mbox" | "vcf" | "ics" => Kind::Text,
+        "txt" | "text" | "md" | "markdown" | "mdown" | "rst" | "adoc" | "asciidoc" | "org" | "tex" | "bib" | "log" | "nfo" | "srt" | "vtt" | "eml" | "msg" | "mbox" | "pst" | "ost" | "vcf" | "ics" => Kind::Text,
         e if super::plain::PLAIN_EXTENSIONS.contains(&e) => Kind::Code,
         _ => Kind::Other,
     }

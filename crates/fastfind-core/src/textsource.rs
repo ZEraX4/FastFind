@@ -80,6 +80,8 @@ impl TextSource {
             }
             TextMode::Stored => match texts.get(path_hash(path)) {
                 Ok(Some((text, locs))) => TextSource::Mem { text, locs, line_based: false },
+                // An e-mail in an archive has no file of its own to read again.
+                _ if crate::index::members::split(path).is_some() => TextSource::Unavailable("no text stored".into()),
                 Ok(None) => Self::reparse(p, registry),
                 Err(e) => {
                     tracing::warn!(path, error = %e, "text store read failed; re-parsing");

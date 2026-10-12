@@ -269,7 +269,7 @@ fn emit_message<F: Read + Seek>(msg: &mut Store<F>, header: usize, limits: &Limi
 const RTF_PREBUF: &[u8] = b"{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss \\fmodern \\fscript \\fdecor MS Sans SerifSymbolArialTimes New RomanCourier{\\colortbl\\red0\\green0\\blue0\r\n\\par \\pard\\plain\\f0\\fs20\\b\\i\\u\\tab\\tx";
 
 /// Decompress an RTF body ([MS-OXRTFCP]). `None` if the header is not recognised.
-fn decompress_rtf(data: &[u8]) -> Option<Vec<u8>> {
+pub(super) fn decompress_rtf(data: &[u8]) -> Option<Vec<u8>> {
     let u32_at = |o: usize| data.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
     let raw_size = (u32_at(4)? as usize).min(MAX_EMBEDDED_BYTES);
     let body = data.get(16..)?;

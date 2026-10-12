@@ -20,6 +20,7 @@ pub mod ooxml;
 pub mod pdf;
 pub mod pdfworker;
 pub mod plain;
+pub mod pst;
 pub mod ppt;
 pub mod registry;
 pub mod rtf;

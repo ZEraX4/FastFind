@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+* **Outlook archives.** E-mails in Outlook data files (`.pst`) are now searchable, each as its
+  own result, named by its subject and shown with the archive and folder it is in. Attachments
+  are searched too (Word, PDF, Excel and the other supported formats), and so are Outlook items
+  attached to an e-mail. Opening a result opens that e-mail in your mail app; *Show in folder*
+  shows the archive. Archives have no size limit. While Outlook has an archive open it keeps
+  the file locked: FastFind tries again later, and earlier results stay searchable. Offline
+  mailbox caches (`.ost`) are found by name only.
+
 ## 1.4.0 — 2026-10-12
 
 * **Quick search from anywhere.** Press Ctrl+Shift+F (⌘⇧F on macOS) in any application to open

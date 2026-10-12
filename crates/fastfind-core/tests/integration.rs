@@ -594,3 +594,61 @@ fn zip_archives_are_searchable_by_entry_name_and_content() {
     assert_eq!(e.status().unwrap().failed, 1, "the damaged archive fails on its own");
     e.shutdown();
 }
+
+#[test]
+fn outlook_archives_give_one_result_per_email() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("mail");
+    fs::create_dir_all(root.join("old")).unwrap();
+    let pst = root.join("2025.pst");
+    fs::copy(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/outlook-archive.pst"), &pst).unwrap();
+    fs::write(root.join("damaged.pst"), b"!BDN not really an archive").unwrap();
+
+    let e = open(&tmp.path().join("data"), false);
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(120)));
+
+    // Each e-mail is its own result, named by its subject and placed in the archive's folder.
+    assert_eq!(search(&e, "condorbudget"), ["Budget review"]);
+    assert_eq!(search(&e, "ospreyfigure"), ["Forwarded request", "Original request"]);
+    assert_eq!(search(&e, "albatrossledger"), ["Geçiş izni — تقرير الميزانية"]);
+    let item = e.search(&SearchRequest::new("condorbudget"), &CancelToken::new()).unwrap().items.remove(0);
+    assert_eq!(item.dir, format!("{} › Archive 2025 › Projects", pst.display()));
+    assert_eq!(Engine::container_of(&item.path), Some(pst.to_str().unwrap()));
+    assert!(e.is_indexed(&item.path));
+    let snippet = e.snippets(&SearchRequest::new("ibisinventory"), std::slice::from_ref(&item.path)).unwrap().remove(0);
+    assert_eq!(snippet.snippets[0].location.as_deref(), Some("Attachment: notes.txt"));
+    let preview = e.preview(&SearchRequest::new("condorbudget"), &item.path).unwrap();
+    assert_eq!(preview.title.as_deref(), Some("Budget review"));
+    let eml = e.export_member(&item.path).unwrap();
+    assert!(String::from_utf8_lossy(&fs::read(&eml).unwrap()).contains("Subject: Budget review"));
+
+    // The archive itself is found by name; a damaged one fails on its own.
+    assert_eq!(search(&e, "filename:2025.pst"), ["2025.pst"]);
+    assert_eq!(e.status().unwrap().failed, 1);
+
+    // Reading a changed archive again replaces its e-mails rather than adding to them.
+    let f = fs::OpenOptions::new().write(true).open(&pst).unwrap();
+    f.set_modified(std::time::SystemTime::now()).unwrap();
+    drop(f);
+    e.rescan(None);
+    assert!(e.wait_idle(Duration::from_secs(120)));
+    assert_eq!(search(&e, "condorbudget"), ["Budget review"]);
+
+    // Moved: the e-mails follow the archive.
+    let moved = root.join("old").join("2025-archive.pst");
+    fs::rename(&pst, &moved).unwrap();
+    e.rescan(None);
+    assert!(e.wait_idle(Duration::from_secs(120)));
+    let items = e.search(&SearchRequest::new("condorbudget"), &CancelToken::new()).unwrap().items;
+    assert_eq!(items.len(), 1);
+    assert_eq!(Engine::container_of(&items[0].path), Some(moved.to_str().unwrap()));
+
+    // Deleted: so are its e-mails.
+    fs::remove_file(&moved).unwrap();
+    e.rescan(None);
+    assert!(e.wait_idle(Duration::from_secs(120)));
+    assert!(search(&e, "condorbudget").is_empty());
+    assert!(search(&e, "ospreyfigure").is_empty());
+    e.shutdown();
+}
