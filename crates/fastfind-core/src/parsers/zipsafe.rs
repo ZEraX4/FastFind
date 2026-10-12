@@ -45,6 +45,12 @@ impl SafeZip {
         self.archive.name_for_index(index)
     }
 
+    /// The entry's name bytes as stored (UTF-8 when the archive says so or carries a Unicode
+    /// path field), without decompressing anything.
+    pub fn raw_name_at(&mut self, index: usize) -> Option<Vec<u8>> {
+        self.archive.by_index_raw(index).ok().map(|f| f.name_raw().to_vec())
+    }
+
     pub fn names(&self) -> Vec<String> {
         self.archive.file_names().map(|s| s.to_string()).collect()
     }

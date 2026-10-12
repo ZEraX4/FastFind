@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "FastFind",
         "width": 1280,
         "height": 820,

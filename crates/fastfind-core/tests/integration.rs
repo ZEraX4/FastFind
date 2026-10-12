@@ -529,6 +529,7 @@ fn an_older_index_format_is_rebuilt_from_stored_text_without_reparsing() {
     let version_file = paths.index_dir.join("fastfind-schema-version");
     fs::write(&version_file, (fastfind_core::index::schema::SCHEMA_VERSION - 1).to_string()).unwrap();
     fs::create_dir_all(paths.index_dir.with_extension("upgrade").join("junk")).unwrap();
+    assert!(fastfind_core::index::IndexStore::upgrade_pending(&paths.index_dir), "the app shows its progress window");
     // Wreck the Word file without changing its size or date: parsing it again would fail.
     let docx = root.join("report.docx");
     let modified = fs::metadata(&docx).unwrap().modified().unwrap();
@@ -539,6 +540,7 @@ fn an_older_index_format_is_rebuilt_from_stored_text_without_reparsing() {
     let e = Engine::open(paths.clone(), EngineOptions { pdfium_dirs: vec![], watch: false, scan_on_start: false, pdf_worker_exe: None }).unwrap();
     assert_eq!(fs::read_to_string(&version_file).unwrap().trim(), fastfind_core::index::schema::SCHEMA_VERSION.to_string());
     assert!(!paths.index_dir.with_extension("upgrade").exists(), "leftovers of an interrupted upgrade are removed");
+    assert!(!fastfind_core::index::IndexStore::upgrade_pending(&paths.index_dir));
     // Before any scan: the Word document is back from its stored text, names are searchable.
     assert_eq!(search(&e, "kookaburra"), ["report.docx"]);
     assert_eq!(search(&e, "blob"), ["blob.bin"]);

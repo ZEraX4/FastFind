@@ -35,6 +35,13 @@ pub fn quarantine(path: &Path, quarantine_dir: &Path) -> std::io::Result<PathBuf
 }
 
 impl IndexStore {
+    /// Will opening the index in `dir` run a format upgrade? Cheap (reads one small file), so
+    /// the app can show progress before it opens the engine.
+    pub fn upgrade_pending(dir: &Path) -> bool {
+        let version = std::fs::read_to_string(dir.join(VERSION_FILE)).ok().and_then(|v| v.trim().parse::<u32>().ok());
+        matches!(version, Some(v) if v != SCHEMA_VERSION) && dir.join("meta.json").exists()
+    }
+
     /// Open (or create) the index. Returns `(store, rebuilt)` where `rebuilt` means the index
     /// is new or was recreated, so the catalog must forget what was indexed.
     ///

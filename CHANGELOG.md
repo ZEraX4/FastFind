@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+* **Zip file names in Turkish, Arabic and other languages.** Zips made by Windows' built-in
+  *Compressed folder* (before Windows 11) and many older tools store file names in the PC's
+  DOS code page without saying so, and FastFind showed them garbled. Names are now decoded
+  like Windows Explorer does: UTF-8 when valid, otherwise the system's code page (Windows).
+* **Progress window for index upgrades.** When an update changes the index format, a small
+  *Updating FastFind's index* window now shows while the index is rebuilt from stored text,
+  instead of the app appearing only once it's done.
+
 ## 1.3.0 — 2026-10-12
 
 * **Faster file-name search.** `filename:`, the *File name* mode and the file-name part of

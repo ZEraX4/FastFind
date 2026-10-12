@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FastFind</title>
+<!-- Shown by the desktop app while it upgrades the index format after an update (see
+     src-tauri/src/main.rs). Self-contained: no scripts, no app code. -->
+<style>
+  :root {
+    --bg: #ffffff; --text: #1b1f24; --muted: #5d6673; --track: #e2e5ea; --accent: #2563eb;
+    color-scheme: light;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161920; --text: #e6e9ee; --muted: #9aa3b0; --track: #2a2f39; --accent: #60a5fa; color-scheme: dark; }
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); cursor: default; user-select: none; }
+  body { display: flex; flex-direction: column; justify-content: center; padding: 0 28px; box-sizing: border-box; gap: 10px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  p { font-size: 13px; line-height: 1.45; color: var(--muted); margin: 0; }
+  .bar { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; margin-top: 6px; }
+  .bar::after { content: ""; display: block; width: 35%; height: 100%; border-radius: 2px; background: var(--accent); animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+  @media (prefers-reduced-motion: reduce) { .bar::after { animation: none; width: 100%; opacity: .5; } }
+</style>
+</head>
+<body data-tauri-drag-region>
+  <h1 data-tauri-drag-region>Updating FastFind's index</h1>
+  <p data-tauri-drag-region>This happens once after an update and takes a few seconds per 100,000 files. Text FastFind already extracted, including OCR, is reused.</p>
+  <div class="bar" role="progressbar" aria-label="Updating the index"></div>
+</body>
+</html>
