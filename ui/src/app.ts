@@ -1,7 +1,7 @@
 // Application controller: layout, search flow, filters, keyboard, status polling.
 
 import { emptyFilters, type Api, type IndexStatus, type SearchFilters, type SearchMode, type SearchRequest, type SearchResponse, type Settings, type SortOrder, type WindowControls } from "./api";
-import { closeDialog, confirmDialog, openHelp, openIndexPanel, openProblems, openSettings } from "./dialogs";
+import { closeDialog, confirmDialog, type IndexPanel, openHelp, openIndexPanel, openProblems, openSettings } from "./dialogs";
 import { clear, debounce, h, icon, modKey, modLabel } from "./dom";
 import { ago, bytes, duration, KIND_OPTIONS, num } from "./format";
 import { I } from "./icons";
@@ -37,6 +37,7 @@ const SIZE_PRESETS: [string, string, number | null, number | null][] = [
 export class App {
   private settings!: Settings;
   private status: IndexStatus | null = null;
+  private indexPanel: IndexPanel | undefined;
   private mode: SearchMode = "smart";
   private caseSensitive = false;
   private wholeWord = false;
@@ -601,7 +602,7 @@ export class App {
 
   private async showIndex(): Promise<void> {
     const st = await this.api.status();
-    openIndexPanel(this.api, st, { refresh: () => void this.refreshStatus(), showProblems: () => openProblems(this.api), addFolder: () => void this.addFolder() });
+    this.indexPanel = openIndexPanel(this.api, st, { refresh: () => void this.refreshStatus(), showProblems: () => openProblems(this.api), addFolder: () => void this.addFolder() });
   }
 
   private showSettings(): void {
@@ -651,6 +652,9 @@ export class App {
       const rootsChanged = JSON.stringify(st.roots.map((r) => r.path)) !== JSON.stringify(this.status?.roots.map((r) => r.path));
       this.status = st;
       this.renderStatus(st);
+      // The Index panel follows the same status updates while it is open.
+      if (this.indexPanel?.isOpen()) this.indexPanel.update(st);
+      else this.indexPanel = undefined;
       if (rootsChanged) {
         this.renderRoots(st);
         if (!this.lastReq) this.showEmpty();
