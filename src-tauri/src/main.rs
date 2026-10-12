@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod desktop;
 mod updates;
 
 use std::sync::Arc;
@@ -32,16 +33,17 @@ fn main() {
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // A second launch focuses the running window instead (the index has one writer).
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
+            // A second launch shows the running window instead (the index has one writer); it may
+            // be hidden in the tray.
+            desktop::show_main(app);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(desktop::shortcut_plugin())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![desktop::HIDDEN_ARG])))
         .manage(updates::UpdateState::default())
+        .manage(desktop::DesktopState::default())
         .setup(move |app| {
             // Once after some updates, opening the engine upgrades the index format (seconds per
             // 100,000 files). The event loop only runs after `setup` returns, so the engine opens
@@ -89,11 +91,21 @@ fn main() {
             updates::check_for_update,
             updates::install_update,
             updates::open_release_page,
+            desktop::shortcut_status,
+            desktop::quick_focus,
+            desktop::quick_hide,
+            desktop::quick_resize,
+            desktop::quick_show_all,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build FastFind");
 
     app.run(|handle, event| {
+        // macOS: clicking the Dock icon while the window is hidden in the menu bar.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            desktop::show_main(handle);
+        }
         if let tauri::RunEvent::Exit = event {
             if let Some(state) = handle.try_state::<AppState>() {
                 state.engine.shutdown();
@@ -145,10 +157,12 @@ fn open_engine(handle: AppHandle, paths: AppPaths, splash: Option<WebviewWindow>
     updates::spawn_auto_check(handle.clone());
     tracing::info!(ms = t0.elapsed().as_millis() as u64, "engine ready");
 
-    // The main window is declared in tauri.conf.json with "create": false.
+    // The main window is declared in tauri.conf.json with "create": false. Started at login, it
+    // stays hidden: FastFind waits in the tray for the shortcut.
+    let hidden = std::env::args().any(|a| a == desktop::HIDDEN_ARG);
     let window = handle.config().app.windows.iter().find(|w| w.label == "main").cloned();
-    match window.map(|cfg| WebviewWindowBuilder::from_config(&handle, &cfg).and_then(|b| b.build())) {
-        Some(Ok(_)) => {}
+    match window.map(|cfg| WebviewWindowBuilder::from_config(&handle, &cfg).and_then(|b| b.visible(!hidden).build())) {
+        Some(Ok(main)) => desktop::setup(&handle, &main),
         Some(Err(e)) => tracing::error!(error = %e, "cannot create the main window"),
         None => tracing::error!("no main window in the configuration"),
     }

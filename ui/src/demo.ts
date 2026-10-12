@@ -59,6 +59,7 @@ let settings: Settings = {
   performance: { cpu: "balanced", memoryCacheMb: 256, background: "automatic" },
   appearance: { theme: "system", fontScale: 1, highContrast: false, showPreview: true },
   updates: { checkAutomatically: null },
+  desktop: { quickSearch: true, quickSearchShortcut: "CommandOrControl+Shift+F", keepRunning: true, startAtLogin: false, closeNoticeShown: false },
 };
 
 export function demoApi(): Api {

@@ -1,7 +1,8 @@
 // Modal dialogs: settings, index details, skipped files, help.
 
 import type { Api, IndexStatus, Settings, SkippedFile } from "./api";
-import { clear, debounce, h, icon, modLabel } from "./dom";
+import { clear, debounce, h, icon, isMac, modLabel } from "./dom";
+import { acceleratorFromEvent, displayShortcut } from "./shortcut";
 import { ago, bytes, num } from "./format";
 import { I } from "./icons";
 import type { Updates } from "./updates";
@@ -106,6 +107,99 @@ function textInput(label: string, get: Get<string>, set: Set<string>, hint?: str
   return field(label, i, hint);
 }
 
+/**
+ * A button that records a global shortcut: click, then press the keys. Esc cancels. Shows the
+ * shortcut the way the operating system writes it.
+ */
+export function shortcutRecorder(get: Get<string>, set: Set<string>): HTMLButtonElement {
+  const b = h("button", { type: "button", class: "btn shortcut-rec", title: "Click, then press the new shortcut" }) as HTMLButtonElement;
+  const show = () => b.replaceChildren(h("kbd", {}, displayShortcut(get())));
+  let recording = false;
+  const stop = () => {
+    recording = false;
+    b.classList.remove("recording");
+    window.removeEventListener("keydown", onKey, true);
+    show();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape" && !e.ctrlKey && !e.metaKey && !e.altKey) return stop();
+    const acc = acceleratorFromEvent(e);
+    if (acc) {
+      set(acc);
+      stop();
+    } else {
+      b.replaceChildren(`Hold ${isMac ? "⌘, ⌃ or ⌥" : "Ctrl or Alt"} and press a key…`);
+    }
+  };
+  b.addEventListener("click", () => {
+    if (recording) return stop();
+    recording = true;
+    b.classList.add("recording");
+    b.replaceChildren("Press the new shortcut…");
+    window.addEventListener("keydown", onKey, true);
+  });
+  b.addEventListener("blur", () => recording && stop());
+  show();
+  return b;
+}
+
+/** Settings → General (desktop app): pop-up search, background running, login item. */
+function generalPanel(api: Api, s: Settings): HTMLElement {
+  const d = s.desktop;
+  const state = h("div", { class: "ocr-status", role: "status", "aria-live": "polite", hidden: true });
+  void api.desktop?.shortcutStatus().then((st) => {
+    if (st.enabled && st.problem && st.shortcut === d.quickSearchShortcut) {
+      state.hidden = false;
+      state.className = "ocr-status warn";
+      state.replaceChildren(icon(I.alert), h("span", {}, `${st.problem} Choose another shortcut.`));
+    }
+  }).catch(() => {});
+  const place = isMac ? "menu bar" : "system tray";
+  return h(
+    "div", {},
+    h("h3", {}, "Quick search"),
+    check("Open a search box from anywhere with a keyboard shortcut", () => d.quickSearch, (v) => (d.quickSearch = v), "Like Spotlight: type, then press Enter to open a file."),
+    field("Shortcut", shortcutRecorder(() => d.quickSearchShortcut, (v) => {
+      d.quickSearchShortcut = v;
+      state.hidden = true;
+    }), "Click, then press the keys you want, for example Ctrl+Alt+Space."),
+    state,
+    h("h3", {}, "Running in the background"),
+    check("Keep FastFind running when the window is closed", () => d.keepRunning, (v) => (d.keepRunning = v), `Keeps the shortcut working and your index up to date. Open or quit FastFind from its ${place} icon.`),
+    check("Start FastFind when I sign in", () => d.startAtLogin, (v) => (d.startAtLogin = v), "Starts in the background, ready for the shortcut."),
+  );
+}
+
+/**
+ * Shown at startup when the quick search shortcut couldn't be registered (usually because
+ * another application uses it): pick another one, turn quick search off, or decide later.
+ */
+export function shortcutPrompt(api: Api, current: Settings, problem: string, onSaved: (s: Settings) => void): void {
+  const s: Settings = structuredClone(current);
+  const message = h("p", { role: "status" }, `${problem} Choose another shortcut for quick search, the pop-up search box that opens from anywhere.`);
+  const recorder = shortcutRecorder(() => s.desktop.quickSearchShortcut, (v) => (s.desktop.quickSearchShortcut = v));
+  const save = async (next: Settings) => {
+    const saved = await api.saveSettings(next);
+    onSaved(saved);
+    const st = await api.desktop?.shortcutStatus();
+    if (st && st.enabled && st.problem) {
+      message.textContent = `${st.problem} Try another one.`;
+      return;
+    }
+    closeDialog(d);
+  };
+  const use = h("button", { class: "btn primary", onclick: () => void save(s).catch((e) => (message.textContent = String(e))) }, "Use this shortcut");
+  const off = h("button", { class: "btn", onclick: () => void save({ ...s, desktop: { ...s.desktop, quickSearch: false } }).catch((e) => (message.textContent = String(e))) }, "Turn off quick search");
+  const d = modal("Quick search shortcut", h("div", { class: "shortcut-prompt" }, message, field("New shortcut", recorder, "Click, then press the keys, for example Ctrl+Alt+Space.")), [
+    off,
+    h("button", { class: "btn", onclick: () => closeDialog(d) }, "Later"),
+    use,
+  ], "small");
+  recorder.focus();
+}
+
 /** OCR settings with a live check of the Tesseract installation under them. */
 function ocrSection(api: Api, s: Settings): HTMLElement[] {
   const status = h("div", { class: "ocr-status", role: "status", "aria-live": "polite", hidden: true });
@@ -154,6 +248,7 @@ function ocrSection(api: Api, s: Settings): HTMLElement[] {
 export async function openSettings(api: Api, current: Settings, onSaved: (s: Settings) => void, updates: Updates | null = null): Promise<void> {
   const s: Settings = structuredClone(current);
   const tabs: [string, () => HTMLElement][] = [
+    ...(api.desktop ? [["General", () => generalPanel(api, s)] as [string, () => HTMLElement]] : []),
     ["Search", () => h(
       "div", {},
       select("Default search mode", [["smart", "Smart search"], ["exact", "Exact phrase"], ["regex", "Regular expression"], ["filename", "File name"]], () => s.search.defaultMode, (v) => (s.search.defaultMode = v)),
@@ -245,6 +340,13 @@ export async function openSettings(api: Api, current: Settings, onSaved: (s: Set
     try {
       const saved = await api.saveSettings(s);
       onSaved(saved);
+      // A shortcut taken by another application only shows up once it is registered.
+      const st = s.desktop.quickSearch ? await api.desktop?.shortcutStatus() : undefined;
+      if (st?.problem) {
+        status.textContent = `Saved. ${st.problem} Choose another shortcut on the General tab.`;
+        save.removeAttribute("disabled");
+        return;
+      }
       closeDialog(d);
     } catch (e) {
       status.textContent = String(e);

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "quick",
+  "description": "The pop-up search window: it calls FastFind commands (search, open, reveal, hide, resize) and listens for the 'quick-show' event. No dialogs and no window permissions; showing, hiding and sizing go through the backend.",
+  "windows": ["quick"],
+  "permissions": ["core:default"]
+}

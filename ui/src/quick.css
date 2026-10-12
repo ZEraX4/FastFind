@@ -1,0 +1,33 @@
+/* The pop-up search window: a search bar that grows into a short result list. The window is
+   resized to fit .qs, so nothing here may depend on the window's height. */
+
+body.quick { background: var(--surface); overflow: hidden; }
+
+.qs { display: flex; flex-direction: column; border: 1px solid var(--border-strong); }
+
+.qs-bar { display: flex; align-items: center; gap: 0.7rem; padding: 0 1.1rem; height: 64px; flex: none; color: var(--muted); }
+.qs-bar .icon { width: 1.4rem; height: 1.4rem; }
+.qs-input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 1.45rem;
+  color: var(--text);
+  min-width: 0;
+}
+.qs-input::placeholder { color: var(--faint); }
+.qs-input::-webkit-search-cancel-button { display: none; }
+
+.qs-note { padding: 0.6rem 1.1rem 0.9rem; color: var(--muted); border-top: 1px solid var(--border); }
+
+.qs-list { list-style: none; margin: 0; padding: 0.3rem 0; border-top: 1px solid var(--border); max-height: 440px; overflow-y: auto; }
+.qs-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.4rem 1.1rem; cursor: default; }
+.qs-row .badge { width: 2.1rem; height: 2.1rem; font-size: 0.6rem; }
+.qs-row.selected { background: var(--selected); box-shadow: inset 3px 0 0 var(--accent); }
+.qs-text { display: flex; flex-direction: column; min-width: 0; }
+.qs-name { font-weight: 600; }
+.qs-dir { font-size: 0.86rem; color: var(--muted); }
+
+.qs-foot { display: flex; gap: 1.1rem; flex-wrap: wrap; padding: 0.45rem 1.1rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--muted); background: var(--surface-2); }
+.qs-foot kbd { font: inherit; font-weight: 600; color: var(--text); }

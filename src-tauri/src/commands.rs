@@ -98,9 +98,13 @@ pub async fn get_settings(state: State<'_, AppState>) -> R<Settings> {
 }
 
 #[tauri::command]
-pub async fn save_settings(state: State<'_, AppState>, settings: Settings) -> R<Settings> {
+pub async fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> R<Settings> {
     let engine = state.engine.clone();
-    blocking(move || engine.update_settings(settings).map_err(err)).await
+    let previous = engine.settings().desktop;
+    let saved = blocking(move || engine.update_settings(settings).map_err(err)).await?;
+    // Shortcut and login item take effect immediately; `shortcut_status` reports the outcome.
+    crate::desktop::apply(&app, &saved.desktop, Some(&previous));
+    Ok(saved)
 }
 
 #[tauri::command]

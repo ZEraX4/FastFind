@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+* **Quick search from anywhere.** Press Ctrl+Shift+F (⌘⇧F on macOS) in any application to open
+  a Spotlight-style search box: results as you type, Enter to open, Ctrl/⌘+Enter to show in
+  the folder, Shift+Enter for all results in FastFind, Esc to close. The shortcut is set in the
+  new Settings → General tab; if another application already uses it, FastFind asks for a
+  different one. Inside FastFind's own window, Ctrl+Shift+F still opens the filters.
+* **Runs in the background.** Closing the window now keeps FastFind in the system tray (menu
+  bar on macOS), so the shortcut works and the index stays current; quit from the tray icon's
+  menu. Both this and a new **Start FastFind when I sign in** option are in Settings → General.
+
 ## 1.3.2 — 2026-10-12
 
 * **Fixed:** the Index panel showed a snapshot taken when it was opened: new files, counts,

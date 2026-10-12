@@ -209,6 +209,32 @@ export interface Settings {
     /** null until the user has been asked; no network request is made before that. */
     checkAutomatically: boolean | null;
   };
+  desktop: {
+    quickSearch: boolean;
+    /** Tauri accelerator, e.g. "CommandOrControl+Shift+F". */
+    quickSearchShortcut: string;
+    keepRunning: boolean;
+    startAtLogin: boolean;
+    closeNoticeShown: boolean;
+  };
+}
+
+export interface ShortcutStatus {
+  enabled: boolean;
+  shortcut: string;
+  /** The shortcut works right now. */
+  registered: boolean;
+  /** Why it doesn't: invalid, or used by another application. */
+  problem: string | null;
+}
+
+/** Desktop app only: background running and the pop-up search. */
+export interface DesktopApi {
+  shortcutStatus(): Promise<ShortcutStatus>;
+  /** "Show all results" from the pop-up search: run this query in the main window. */
+  onShowQuery(cb: (query: string) => void): void;
+  /** The global shortcut was pressed while the main window was in front. */
+  onAppShortcut(cb: (accelerator: string) => void): void;
 }
 
 export interface OcrSetup {
@@ -267,6 +293,8 @@ export interface Api {
   window?: WindowControls;
   /** Present in the desktop app only. */
   updates?: UpdateApi;
+  /** Present in the desktop app only. */
+  desktop?: DesktopApi;
 }
 
 export interface WindowControls {
@@ -327,6 +355,15 @@ export async function tauriApi(): Promise<Api> {
     },
     onIndexUpdated: (cb) => {
       void listen<number>("index-updated", (e) => cb(e.payload));
+    },
+    desktop: {
+      shortcutStatus: () => invoke("shortcut_status"),
+      onShowQuery: (cb) => {
+        void listen<string>("show-query", (e) => cb(e.payload));
+      },
+      onAppShortcut: (cb) => {
+        void listen<string>("app-shortcut", (e) => cb(e.payload));
+      },
     },
     updates: {
       check: () => invoke("check_for_update"),

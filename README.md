@@ -23,6 +23,10 @@ request it ever makes is an optional, opt-in update check.
 * **Results:** snippets with highlighted matches and exact locations (*Page 3*,
   *Slide 4 — Roadmap*, *Budget!B7*, *Line 120*), a preview with match-by-match navigation,
   and open / show in folder.
+* **Quick search:** a Spotlight-style search box that opens from anywhere with a keyboard
+  shortcut (Ctrl+Shift+F, ⌘⇧F on macOS; changeable in Settings → General). FastFind keeps
+  running in the system tray (menu bar on macOS) when its window is closed, and can start when
+  you sign in.
 * **Index:** persistent and incremental. At startup only changed files are re-parsed.
   Live file watching keeps it current. Search works while indexing runs.
 * **Window:** frameless, with the header acting as the title bar (drag to move, double-click to
@@ -304,10 +308,24 @@ Modes: **Smart** (the syntax above), **Exact** (literal text including punctuati
 **Regex** (linear-time regular expressions; scans text, so it is slower on huge indexes),
 **File name** (names only, `*` and `?` wildcards).
 
+### Quick search
+
+Press **Ctrl+Shift+F** (⌘⇧F on macOS) in any application to open a small search box. Results
+appear as you type; **Enter** opens the selected file, **Ctrl/⌘+Enter** shows it in its folder,
+**Shift+Enter** shows all results in the FastFind window, and **Esc** clears, then closes. In
+FastFind's own window the same keys keep their meaning there (filters).
+
+Change the shortcut, or turn the feature off, in **Settings → General**. If another application
+already uses the shortcut, FastFind asks for a different one when it starts. Closing the window
+keeps FastFind running in the system tray (menu bar on macOS) so the shortcut keeps working;
+**Quit FastFind** is in the tray icon's menu. **Start FastFind when I sign in** starts it in the
+background.
+
 ### Keyboard shortcuts
 
 | Keys | Action |
 |---|---|
+| Ctrl+Shift+F (⌘⇧F), anywhere | quick search (configurable) |
 | Ctrl/⌘+K, Ctrl/⌘+F | focus search |
 | Enter | search now / open the selected file |
 | Esc | clear the search |
