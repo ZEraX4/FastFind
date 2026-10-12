@@ -1,7 +1,8 @@
 // Application controller: layout, search flow, filters, keyboard, status polling.
 
 import { emptyFilters, type Api, type IndexStatus, type SearchFilters, type SearchMode, type SearchRequest, type SearchResponse, type Settings, type SortOrder, type WindowControls } from "./api";
-import { closeDialog, confirmDialog, type IndexPanel, openHelp, openIndexPanel, openProblems, openSettings } from "./dialogs";
+import { keyEventFromAccelerator } from "./shortcut";
+import { closeDialog, confirmDialog, type IndexPanel, openHelp, openIndexPanel, openProblems, openSettings, shortcutPrompt } from "./dialogs";
 import { clear, debounce, h, icon, modKey, modLabel } from "./dom";
 import { ago, bytes, duration, KIND_OPTIONS, num } from "./format";
 import { I } from "./icons";
@@ -113,6 +114,21 @@ export class App {
     await this.refreshStatus();
     this.updates?.start();
     this.input.focus();
+    this.api.desktop?.onAppShortcut((acc) => document.dispatchEvent(keyEventFromAccelerator(acc)));
+    this.api.desktop?.onShowQuery((q) => {
+      this.input.value = q;
+      void this.runSearch();
+      this.input.focus();
+    });
+    await this.checkShortcut();
+  }
+
+  /** The pop-up search shortcut may be taken by another application: ask for another one. */
+  private async checkShortcut(): Promise<void> {
+    const st = await this.api.desktop?.shortcutStatus().catch(() => undefined);
+    if (st?.enabled && !st.registered && st.problem) {
+      shortcutPrompt(this.api, this.settings, st.problem, (s) => (this.settings = s));
+    }
   }
 
   // ------------------------------------------------------------------------------------------

@@ -15,15 +15,20 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 fastfind-core = { path = "../crates/fastfind-core" }
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 parking_lot.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"] }
 
 [features]
 # Enables `tauri dev` custom protocol handling in release builds.

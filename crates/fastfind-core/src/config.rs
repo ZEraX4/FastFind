@@ -204,6 +204,37 @@ pub struct UpdateSettings {
     pub check_automatically: Option<bool>,
 }
 
+/// The pop-up search's default shortcut: Ctrl+Shift+F, or ⌘⇧F on macOS.
+pub const DEFAULT_QUICK_SEARCH_SHORTCUT: &str = "CommandOrControl+Shift+F";
+
+/// Desktop-app behaviour (ignored by the CLI).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DesktopSettings {
+    /// Pop-up search on a global shortcut.
+    pub quick_search: bool,
+    /// Shortcut in Tauri accelerator syntax, e.g. `CommandOrControl+Shift+F`.
+    pub quick_search_shortcut: String,
+    /// Closing the main window hides FastFind to the tray instead of quitting.
+    pub keep_running: bool,
+    /// Start (to the tray) when the user signs in.
+    pub start_at_login: bool,
+    /// The one-time "FastFind is still running" notice has been shown.
+    pub close_notice_shown: bool,
+}
+
+impl Default for DesktopSettings {
+    fn default() -> Self {
+        Self {
+            quick_search: true,
+            quick_search_shortcut: DEFAULT_QUICK_SEARCH_SHORTCUT.into(),
+            keep_running: true,
+            start_at_login: false,
+            close_notice_shown: false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -212,6 +243,7 @@ pub struct Settings {
     pub performance: PerformanceSettings,
     pub appearance: AppearanceSettings,
     pub updates: UpdateSettings,
+    pub desktop: DesktopSettings,
 }
 
 impl Settings {
@@ -246,6 +278,11 @@ impl Settings {
         }
         self.performance.memory_cache_mb = self.performance.memory_cache_mb.clamp(64, 8192);
         self.appearance.font_scale = self.appearance.font_scale.clamp(0.8, 1.6);
+        let d = &mut self.desktop;
+        d.quick_search_shortcut = d.quick_search_shortcut.trim().to_string();
+        if d.quick_search_shortcut.is_empty() || d.quick_search_shortcut.len() > 64 {
+            d.quick_search_shortcut = DEFAULT_QUICK_SEARCH_SHORTCUT.into();
+        }
         Ok(())
     }
 
@@ -341,6 +378,11 @@ mod tests {
         assert_eq!(l.updates.check_automatically, None);
         std::fs::write(&p, r#"{"updates":{"checkAutomatically":false}}"#).unwrap();
         assert_eq!(Settings::load(&p).updates.check_automatically, Some(false));
+        // Settings from before 1.4.0 get the pop-up search with its default shortcut.
+        assert_eq!(l.desktop, DesktopSettings::default());
+        assert!(l.desktop.quick_search && l.desktop.keep_running && !l.desktop.start_at_login);
+        std::fs::write(&p, r#"{"desktop":{"quickSearchShortcut":"  "}}"#).unwrap();
+        assert_eq!(Settings::load(&p).desktop.quick_search_shortcut, DEFAULT_QUICK_SEARCH_SHORTCUT);
     }
 
     #[test]

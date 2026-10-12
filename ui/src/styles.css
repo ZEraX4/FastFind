@@ -674,3 +674,10 @@ table.problems th, table.problems td { padding: 0.4rem 0.6rem; border-bottom: 1p
   z-index: 50;
 }
 .demo-notice a { color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+/* ---------- shortcut recorder ---------- */
+
+.shortcut-rec { min-width: 12rem; justify-content: center; }
+.shortcut-rec kbd { font: inherit; font-weight: 600; letter-spacing: 0.02em; }
+.shortcut-rec.recording { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); }
+.shortcut-prompt p { margin: 0 0 1rem; line-height: 1.45; }

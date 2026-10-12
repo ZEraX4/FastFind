@@ -1,5 +1,5 @@
 // Shared in-memory Api for UI tests.
-import type { Api, IndexStatus, OcrSetup, Preview, ResultItem, RootInfo, SearchRequest, SearchResponse, Settings, SnippetResult, UpdateApi, WindowControls } from "../src/api";
+import type { Api, DesktopApi, IndexStatus, OcrSetup, Preview, ResultItem, RootInfo, SearchRequest, SearchResponse, Settings, ShortcutStatus, SnippetResult, UpdateApi, WindowControls } from "../src/api";
 
 export const settings = (): Settings => ({
   search: { defaultMode: "smart", caseSensitive: false, wholeWord: false, pageSize: 50, resultLimit: 10000, nameBoost: 3, metadataBoost: 1.5, phraseBoost: 2, verifyBudgetMs: 3000, regexBudgetMs: 10000 },
@@ -11,6 +11,7 @@ export const settings = (): Settings => ({
   performance: { cpu: "balanced", memoryCacheMb: 256, background: "automatic" },
   appearance: { theme: "system", fontScale: 1, highContrast: false, showPreview: true },
   updates: { checkAutomatically: null },
+  desktop: { quickSearch: true, quickSearchShortcut: "CommandOrControl+Shift+F", keepRunning: true, startAtLogin: false, closeNoticeShown: false },
 });
 
 export function item(i: number, name: string, extra: Partial<ResultItem> = {}): ResultItem {
@@ -37,6 +38,16 @@ export class FakeApi implements Api {
   ocrChecks: Settings["indexing"]["ocr"][] = [];
   ocrSetup: OcrSetup = { tesseract: "/usr/bin/tesseract", version: "5.5.0", languages: ["eng", "osd"], missingLanguages: [], problem: null };
   indexListener: ((g: number) => void) | null = null;
+  shortcut: ShortcutStatus = { enabled: true, shortcut: "CommandOrControl+Shift+F", registered: true, problem: null };
+  /** Shortcuts another application holds: saving one of them fails to register. */
+  takenShortcuts: string[] = [];
+  showQueryListener: ((q: string) => void) | null = null;
+  appShortcutListener: ((acc: string) => void) | null = null;
+  desktop?: DesktopApi = {
+    shortcutStatus: async () => structuredClone(this.shortcut),
+    onShowQuery: (cb) => { this.showQueryListener = cb; },
+    onAppShortcut: (cb) => { this.appShortcutListener = cb; },
+  };
 
   async search(req: SearchRequest): Promise<SearchResponse> {
     this.requests.push(structuredClone(req));
@@ -76,7 +87,14 @@ export class FakeApi implements Api {
   async setPaused(p: boolean) { this.paused = p; }
   async rebuild() {}
   async getSettings() { return structuredClone(this.cfg); }
-  async saveSettings(s: Settings) { this.saved.push(structuredClone(s)); this.cfg = s; return s; }
+  async saveSettings(s: Settings) {
+    this.saved.push(structuredClone(s));
+    this.cfg = s;
+    const d = s.desktop;
+    const taken = this.takenShortcuts.includes(d.quickSearchShortcut);
+    this.shortcut = { enabled: d.quickSearch, shortcut: d.quickSearchShortcut, registered: d.quickSearch && !taken, problem: d.quickSearch && taken ? `${d.quickSearchShortcut} is already used by another application.` : null };
+    return s;
+  }
   async problems() { return { items: [], total: 0 }; }
   async diagnostics() { return { version: "1.0.0", dataDir: "/data", memoryRssBytes: 1, workerThreads: 4, storageRotational: false, pdfEngine: "PDFium", ocrEngine: null, indexSegments: 1, indexDocs: 4, queryCacheEntries: 0, queryCacheHits: 0, queryCacheMisses: 0, logDir: "/data/logs" }; }
   async openFile(p: string) { this.opened.push(p); }

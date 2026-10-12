@@ -227,7 +227,16 @@ a catalog mismatch still means a full rebuild.
   backend opens only paths present in the index. Document text is always inserted as text nodes.
 * Parsers: size, time, depth, decompression and entity limits (R11); each call is isolated,
   and PDFium runs out of process.
-* Single instance: a second launch focuses the running window, so there is only one index writer.
+* Single instance: a second launch shows the running window (it may be hidden in the tray), so
+  there is only one index writer.
+* Background running (`src-tauri/src/desktop.rs`): a tray icon; closing the main window hides
+  it (`Settings.desktop.keepRunning`); an optional login item starts FastFind with `--hidden`. The
+  pop-up search is a second window (`ui/quick.html`) with its own capability
+  (`capabilities/quick.json`: events only, no dialogs or window permissions; showing, hiding,
+  sizing and focusing go through backend commands). Its global shortcut is registered with the
+  global-shortcut plugin; a shortcut held by another application fails to register and the UI
+  asks for another one. When FastFind's own window is in front, the shortcut is handed to that
+  window as an ordinary key press (`app-shortcut`), since a global shortcut never reaches it.
 
 ---
 
