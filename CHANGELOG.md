@@ -2,9 +2,6 @@
 
 ## 1.4.0 — 2026-10-12
 
-* **Fixed (macOS):** the main window was created before FastFind was ready, so the tray
-  icon, the quick search shortcut and keeping FastFind running after closing the window did
-  not start on macOS.
 * **Quick search from anywhere.** Press Ctrl+Shift+F (⌘⇧F on macOS) in any application to open
   a Spotlight-style search box: results as you type, Enter to open, Ctrl/⌘+Enter to show in
   the folder, Shift+Enter for all results in FastFind, Esc to close. The shortcut is set in the
