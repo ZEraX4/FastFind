@@ -12,8 +12,18 @@ $url = "https://github.com/bblanchon/pdfium-binaries/releases/download/$([uri]::
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("pdfium-" + [guid]::NewGuid())
 New-Item -ItemType Directory $tmp | Out-Null
 try {
-  Write-Host "Downloading $url"
-  Invoke-WebRequest -Uri $url -OutFile "$tmp\pdfium.tgz" -UseBasicParsing
+  # GitHub's release downloads sometimes answer 502/504: retry a few times.
+  for ($attempt = 1; ; $attempt++) {
+    Write-Host "Downloading $url"
+    try {
+      Invoke-WebRequest -Uri $url -OutFile "$tmp\pdfium.tgz" -UseBasicParsing
+      break
+    } catch {
+      if ($attempt -ge 4) { throw }
+      Write-Warning "Download failed ($($_.Exception.Message)); retrying in $(10 * $attempt) s"
+      Start-Sleep -Seconds (10 * $attempt)
+    }
+  }
   tar -xzf "$tmp\pdfium.tgz" -C $tmp
   Copy-Item "$tmp\bin\pdfium.dll" $dest -Force
   if (Test-Path "$tmp\LICENSE") { Copy-Item "$tmp\LICENSE" "$dest\PDFIUM-LICENSE" -Force }
