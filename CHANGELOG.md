@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.2 — 2026-10-12
 
 * **Fixed:** the Index panel showed a snapshot taken when it was opened: new files, counts,
   folder states and indexing progress only appeared after closing and reopening it. It now
