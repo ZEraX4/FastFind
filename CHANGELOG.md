@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 — 2026-10-12
 
 * **Quick search from anywhere.** Press Ctrl+Shift+F (⌘⇧F on macOS) in any application to open
   a Spotlight-style search box: results as you type, Enter to open, Ctrl/⌘+Enter to show in
