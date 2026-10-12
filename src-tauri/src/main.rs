@@ -160,11 +160,30 @@ fn open_engine(handle: AppHandle, paths: AppPaths, splash: Option<WebviewWindow>
     // The main window is declared in tauri.conf.json with "create": false. Started at login, it
     // stays hidden: FastFind waits in the tray for the shortcut.
     let hidden = std::env::args().any(|a| a == desktop::HIDDEN_ARG);
-    let window = handle.config().app.windows.iter().find(|w| w.label == "main").cloned();
-    match window.map(|cfg| WebviewWindowBuilder::from_config(&handle, &cfg).and_then(|b| b.visible(!hidden).build())) {
-        Some(Ok(main)) => desktop::setup(&handle, &main),
-        Some(Err(e)) => tracing::error!(error = %e, "cannot create the main window"),
-        None => tracing::error!("no main window in the configuration"),
+    let main = match handle.get_webview_window("main") {
+        // A platform config without "create": false makes Tauri create it at startup (1.4.0 on
+        // macOS): use it rather than lose the tray, the pop-up and close-to-tray.
+        Some(w) => {
+            tracing::warn!("main window already exists; every tauri.*.conf.json needs \"create\": false on it");
+            Some(w)
+        }
+        None => {
+            let config = handle.config().app.windows.iter().find(|w| w.label == "main").cloned();
+            match config.map(|cfg| WebviewWindowBuilder::from_config(&handle, &cfg).and_then(|b| b.visible(!hidden).build())) {
+                Some(Ok(w)) => Some(w),
+                Some(Err(e)) => {
+                    tracing::error!(error = %e, "cannot create the main window");
+                    None
+                }
+                None => {
+                    tracing::error!("no main window in the configuration");
+                    None
+                }
+            }
+        }
+    };
+    if let Some(main) = &main {
+        desktop::setup(&handle, main);
     }
     // After the main window exists, so closing it never leaves the app without windows.
     if let Some(s) = splash {

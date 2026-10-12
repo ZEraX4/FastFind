@@ -333,6 +333,30 @@ mod tests {
         }
     }
 
+    /// The main window must exist only after the engine is ready (its UI calls commands at
+    /// once) and `desktop::setup` must get to run on it. A platform config replaces the whole
+    /// `windows` list, so each one has to say `"create": false` again (1.4.0 on macOS didn't).
+    #[test]
+    fn every_platform_config_defers_the_main_window() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut checked = 0;
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            if !(name.starts_with("tauri.") && name.ends_with(".json")) {
+                continue;
+            }
+            let conf: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            for w in conf["app"]["windows"].as_array().into_iter().flatten() {
+                if w["label"] == "main" {
+                    assert_eq!(w["create"], serde_json::Value::Bool(false), "{name}: the main window needs \"create\": false");
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked >= 2, "tauri.conf.json and tauri.macos.conf.json both define the main window");
+    }
+
     #[test]
     fn the_default_shortcut_parses() {
         assert!(Shortcut::from_str(fastfind_core::config::DEFAULT_QUICK_SEARCH_SHORTCUT).is_ok());

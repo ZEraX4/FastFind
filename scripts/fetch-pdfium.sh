@@ -22,7 +22,8 @@ trap 'rm -rf "$TMP"' EXIT
 ENC_VERSION="$(printf '%s' "$VERSION" | sed 's#/#%2F#g')"
 URL="https://github.com/bblanchon/pdfium-binaries/releases/download/${ENC_VERSION}/pdfium-${PLATFORM}.tgz"
 echo "Downloading $URL"
-curl -fsSL "$URL" -o "$TMP/pdfium.tgz"
+# GitHub's release downloads sometimes answer 502/504: retry a few times.
+curl -fsSL --retry 4 --retry-all-errors --retry-delay 10 "$URL" -o "$TMP/pdfium.tgz"
 tar -xzf "$TMP/pdfium.tgz" -C "$TMP"
 case "$PLATFORM" in
   mac-*) cp "$TMP/lib/libpdfium.dylib" "$DIR/" ;;
