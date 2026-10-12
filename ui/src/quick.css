@@ -3,7 +3,9 @@
 
 body.quick { background: var(--surface); overflow: hidden; }
 
-.qs { display: flex; flex-direction: column; border: 1px solid var(--border-strong); }
+/* No border of our own: the window frame provides it (on Windows 11 a rounded frame with its
+   own 1px edge, which a square CSS border inside would cut off at the corners). */
+.qs { display: flex; flex-direction: column; }
 
 .qs-bar { display: flex; align-items: center; gap: 0.7rem; padding: 0 1.1rem; height: 64px; flex: none; color: var(--muted); }
 .qs-bar .icon { width: 1.4rem; height: 1.4rem; }
