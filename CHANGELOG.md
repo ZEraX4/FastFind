@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+* **Fixed:** the Index panel showed a snapshot taken when it was opened: new files, counts,
+  folder states and indexing progress only appeared after closing and reopening it. It now
+  updates live, and Rescan, Update now, Pause and Remove keep it open so you can watch the
+  result.
+
 ## 1.3.1 — 2026-10-12
 
 * **Zip file names in Turkish, Arabic and other languages.** Zips made by Windows' built-in

@@ -310,64 +310,82 @@ function diagnosticsPanel(api: Api): HTMLElement {
 // Index details
 // ------------------------------------------------------------------------------------------
 
-export function openIndexPanel(api: Api, st: IndexStatus, actions: { refresh(): void; showProblems(): void; addFolder(): void }): void {
-  const p = st.progress;
-  const problems = st.skipped + st.failed + st.encrypted;
-  const summary = h(
-    "div", { class: "stats" },
-    stat("Indexed files", num(st.filesTotal)),
-    stat("Successful", num(st.indexed + st.nameOnly)),
-    stat("Skipped / failed", num(problems)),
-    stat("Need OCR", num(st.needsOcr)),
-    stat("Index size", bytes(st.indexBytes + st.textStoreBytes)),
-    stat("Last updated", ago(st.lastUpdated)),
-  );
-  const roots = h("ul", { class: "root-list" });
-  for (const r of st.roots) {
-    roots.appendChild(h(
-      "li", {},
-      icon(I.folder),
-      h("div", { class: "grow" },
-        h("div", { class: "rl-path" }, r.path),
-        h("div", { class: "rl-meta" }, `${num(r.fileCount)} files · checked ${ago(r.lastScanAt)} · ${!r.available ? "folder unavailable" : r.scanning ? "scanning…" : r.watchStatus || "not watched"}`)),
-      h("button", { class: "btn small", title: "Check this folder for changes now", onclick: () => void api.rescan(r.id).then(actions.refresh) }, "Rescan"),
-      h("button", { class: "btn small danger", title: "Stop indexing this folder and remove it from the index", onclick: async () => {
-        if (await confirmDialog("Remove folder", `Remove “${r.path}” and its ${num(r.fileCount)} files from the index? The files themselves are not touched.`, "Remove", true)) {
-          await api.removeRoot(r.id);
-          closeDialog(d);
-          actions.refresh();
-        }
-      } }, "Remove"),
-    ));
-  }
+/** A live Index panel: `update` redraws it from a fresh status while it is open. */
+export interface IndexPanel {
+  update(st: IndexStatus): void;
+  isOpen(): boolean;
+}
+
+export function openIndexPanel(api: Api, st: IndexStatus, actions: { refresh(): void; showProblems(): void; addFolder(): void }): IndexPanel {
+  let cur = st;
+  const body = h("div", { class: "index-panel", "aria-live": "polite" });
+  const skipped = h("button", { class: "btn", onclick: () => { closeDialog(d); actions.showProblems(); } }, "View skipped files");
   const pause = h("button", { class: "btn", onclick: async () => {
-    await api.setPaused(!p.paused);
-    closeDialog(d);
+    await api.setPaused(!cur.progress.paused);
     actions.refresh();
-  } }, icon(p.paused ? I.play : I.pause), p.paused ? "Resume indexing" : "Pause indexing");
-  const body = h(
-    "div", { class: "index-panel" },
-    summary,
-    st.ocrProblem && st.needsOcr > 0
-      ? h("div", { class: "ocr-status warn" }, icon(I.alert), h("span", {}, `${num(st.needsOcr)} scanned ${st.needsOcr === 1 ? "file is" : "files are"} waiting for OCR. ${st.ocrProblem} Check Settings → Indexing.`))
-      : null,
-    p.active ? h("p", { class: "muted" }, `Indexing: ${num(p.processed)} processed, ${num(p.queued)} queued${p.filesPerSec > 0 ? ` · ${Math.round(p.filesPerSec)} files/s` : ""}`) : null,
-    h("h3", {}, "Folders"),
-    st.roots.length ? roots : h("p", { class: "muted" }, "No folders yet."),
-  );
+  } });
+
+  const render = (s: IndexStatus) => {
+    cur = s;
+    const p = s.progress;
+    const problems = s.skipped + s.failed + s.encrypted;
+    // Redrawn about every second while indexing: put keyboard focus back where it was.
+    const focusKey = (document.activeElement as HTMLElement | null)?.dataset?.focusKey;
+    const roots = h("ul", { class: "root-list" });
+    for (const r of s.roots) {
+      roots.appendChild(h(
+        "li", {},
+        icon(I.folder),
+        h("div", { class: "grow" },
+          h("div", { class: "rl-path" }, r.path),
+          h("div", { class: "rl-meta" }, `${num(r.fileCount)} files · checked ${ago(r.lastScanAt)} · ${!r.available ? "folder unavailable" : r.scanning ? "scanning…" : r.watchStatus || "not watched"}`)),
+        h("button", { class: "btn small", "data-focus-key": `rescan-${r.id}`, title: "Check this folder for changes now", onclick: () => void api.rescan(r.id).then(actions.refresh) }, "Rescan"),
+        h("button", { class: "btn small danger", "data-focus-key": `remove-${r.id}`, title: "Stop indexing this folder and remove it from the index", onclick: async () => {
+          if (await confirmDialog("Remove folder", `Remove “${r.path}” and its ${num(r.fileCount)} files from the index? The files themselves are not touched.`, "Remove", true)) {
+            await api.removeRoot(r.id);
+            actions.refresh();
+          }
+        } }, "Remove"),
+      ));
+    }
+    clear(body);
+    body.append(
+      h(
+        "div", { class: "stats" },
+        stat("Indexed files", num(s.filesTotal)),
+        stat("Successful", num(s.indexed + s.nameOnly)),
+        stat("Skipped / failed", num(problems)),
+        stat("Need OCR", num(s.needsOcr)),
+        stat("Index size", bytes(s.indexBytes + s.textStoreBytes)),
+        stat("Last updated", ago(s.lastUpdated)),
+      ),
+      ...(s.ocrProblem && s.needsOcr > 0
+        ? [h("div", { class: "ocr-status warn" }, icon(I.alert), h("span", {}, `${num(s.needsOcr)} scanned ${s.needsOcr === 1 ? "file is" : "files are"} waiting for OCR. ${s.ocrProblem} Check Settings → Indexing.`))]
+        : []),
+      ...(p.active ? [h("p", { class: "muted" }, `Indexing: ${num(p.processed)} processed, ${num(p.queued)} queued${p.filesPerSec > 0 ? ` · ${Math.round(p.filesPerSec)} files/s` : ""}`)] : []),
+      h("h3", {}, "Folders"),
+      s.roots.length ? roots : h("p", { class: "muted" }, "No folders yet."),
+    );
+    if (focusKey) (body.querySelector(`[data-focus-key="${focusKey}"]`) as HTMLElement | null)?.focus();
+    skipped.disabled = problems + s.needsOcr === 0;
+    clear(pause);
+    pause.append(icon(p.paused ? I.play : I.pause), p.paused ? "Resume indexing" : "Pause indexing");
+  };
+  render(st);
+
   const d = modal("Index", body, [
     h("button", { class: "btn", onclick: () => { closeDialog(d); actions.addFolder(); } }, icon(I.folderPlus), "Add folder"),
-    h("button", { class: "btn", disabled: problems + st.needsOcr === 0, onclick: () => { closeDialog(d); actions.showProblems(); } }, "View skipped files"),
+    skipped,
     pause,
-    h("button", { class: "btn", onclick: () => void api.rescan().then(() => { closeDialog(d); actions.refresh(); }) }, icon(I.refresh), "Update now"),
+    h("button", { class: "btn", onclick: () => void api.rescan().then(actions.refresh) }, icon(I.refresh), "Update now"),
     h("button", { class: "btn danger", onclick: async () => {
       if (await confirmDialog("Rebuild index", "Delete the whole index and index all folders again from scratch? Search keeps working for files that are already re-indexed.", "Rebuild", true)) {
         await api.rebuild();
-        closeDialog(d);
         actions.refresh();
       }
     } }, "Rebuild…"),
   ], "wide");
+  return { update: render, isOpen: () => d.isConnected };
 }
 
 function stat(label: string, value: string): HTMLElement {
