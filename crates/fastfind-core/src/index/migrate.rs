@@ -14,6 +14,7 @@
 //! * everything else (plain-text files, which are read from disk anyway, re-parsed formats, and
 //!   documents whose stored text was cut) is marked changed in the catalog, so the startup scan
 //!   reads it again.
+//!   Outlook archives are too: their e-mails have no catalog rows to rebuild them from.
 //!
 //! Crash safety: the new index is built in a separate folder and swapped in by the caller only
 //! when complete, so an interrupted upgrade starts again from the untouched old index.
@@ -25,6 +26,7 @@ use tantivy::schema::Value;
 use tantivy::{Index, TantivyDocument};
 
 use super::catalog::{Catalog, Status};
+use super::members;
 use super::service::base_doc;
 use super::textstore::TextStore;
 use super::{schema, store::IndexStore};
@@ -72,8 +74,13 @@ pub fn migrate(old_dir: &Path, new_dir: &Path, catalog: &Catalog, texts: &TextSt
         for doc in store.iter::<TantivyDocument>(segment.alive_bitset()) {
             let doc = doc?;
             let Some(path) = doc.get_first(old_path).and_then(|v| v.as_str()).map(str::to_string) else { continue };
-            // Not in the catalog any more: the scan will not expect it either.
+            // Not in the catalog any more: the scan will not expect it either. (Members of an
+            // archive never are: the archive is read again instead.)
             let Some(row) = catalog.get(&path)? else { continue };
+            if members::is_container(&path) {
+                rescan.push(path);
+                continue;
+            }
             let u64_of = |fl: Option<tantivy::schema::Field>| fl.and_then(|fl| doc.get_first(fl)).and_then(|v| v.as_u64());
             let text_of = |fl: Option<tantivy::schema::Field>| fl.and_then(|fl| doc.get_first(fl)).and_then(|v| v.as_str()).unwrap_or("").to_string();
             let mode = TextMode::from_u64(u64_of(old_mode).unwrap_or(0));

@@ -117,6 +117,20 @@ watcher events ─► debounce 600 ms ─► re-examine path ─► same differ 
 * **Incremental:** at startup each folder is reconciled against the catalog, and only changed
   files are parsed. Touched-but-identical files (same size, different mtime) are detected by
   content hash and only have their timestamp updated.
+* **Outlook archives (`.pst`) give one result per e-mail** (`index/members.rs`). A worker reads
+  the archive one message at a time (`parsers/pst.rs`, Microsoft's `outlook-pst` crate, a
+  patched copy in `vendor/` until its fixes are released) and
+  sends each e-mail to the writer as its own document. Its path is
+  `<archive>/#<message id>` (with the platform separator), which no real file can have since
+  its parent is a file. E-mails have no catalog rows, so scans, rename detection and file
+  counts only ever see real files. The archive's own row is written after its e-mails, so an
+  interrupted run is repeated on the next scan. Re-reading, moving, deleting or removing the
+  folder of an archive deletes its e-mails with a range query on `path`. Archives have no size
+  limit, and the time limit applies per message. Outlook locks the header of an archive it has
+  open: such archives are recorded as *in use by Outlook* with no date, so every later scan
+  tries again, and their old e-mails stay searchable meanwhile. Opening a result exports that
+  e-mail as an `.eml` file for the default mail app; *Show in folder* shows the archive.
+  Offline caches (`.ost`) use a format the crate cannot read and are indexed by name only.
 
 ### 3.2 Document fields (Tantivy)
 
@@ -163,7 +177,7 @@ any rule requires bumping `SCHEMA_VERSION`; see §4 for how existing indexes are
 |---|---|---|
 | Raw | text, code, CSV, logs… | original file, streamed |
 | Reparse | HTML, XML, JSON | re-extracted on demand |
-| Stored | PDF, Office, ODF, EPUB, RTF | zstd blob in `text.db` (≤ 1 MB/doc) |
+| Stored | PDF, Office, ODF, EPUB, RTF, e-mail, e-mails in Outlook archives | zstd blob in `text.db` (≤ 1 MB/doc) |
 
 Location anchors recorded during extraction map a byte offset to `Page 3`, `≈ Page 2`
 (DOCX), `Slide 4 — Title`, `Sheet!B7` (exact cell, including sparse rows and columns),

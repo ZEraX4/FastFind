@@ -11,7 +11,8 @@ request it ever makes is an optional, opt-in update check.
 
 * **Formats:** TXT, Markdown, CSV/TSV, logs, 150+ source/config types, HTML, XML, JSON, RTF,
   **DOC, DOCX, XLS, XLSX, PPT, PPTX**, ODT/ODS/ODP, EPUB, **PDF** (via PDFium) and e-mail
-  (**EML** and Outlook **MSG**, including attachments), and **ZIP** archives (the names and
+  (**EML** and Outlook **MSG**, including attachments), Outlook archives (**PST**, one result
+  per e-mail; opening one hands it to your mail app), and **ZIP** archives (the names and
   contents of the files inside, nested archives included). Scanned PDFs, and scanned pages inside
   typed PDFs, are detected and can be OCR'd with a local Tesseract.
 * **Languages:** accents are ignored (`Café` = `cafe`, `Geçiş` = `gecis`), and Arabic is
@@ -133,8 +134,8 @@ npm test
   re-indexing, the live file watcher, corrupted-index recovery, zip bombs, and malformed or
   deeply nested files.
 * **Fixture tests** (`tests/fixtures.rs`) use real `.doc/.docx/.xls/.xlsx/.ppt/.pptx` files
-  saved by Microsoft Office, including password-protected ones, and `.msg` messages saved by
-  Outlook (with attachments).
+  saved by Microsoft Office, including password-protected ones, and `.msg` messages and a
+  `.pst` archive saved by Outlook (with attachments).
 * **PDF tests** (`tests/pdf.rs`) cover a Word-exported PDF (pages, metadata), 40-page
   documents and scanned-page classification.
 * **OCR tests** (`tests/ocr.rs`, need a local Tesseract; skipped otherwise) use genuine scans:

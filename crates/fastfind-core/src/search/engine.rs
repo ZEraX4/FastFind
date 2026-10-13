@@ -269,7 +269,17 @@ impl SearchService {
         let s = |fl| doc.get_first(fl).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let u = |fl| doc.get_first(fl).and_then(|v| v.as_u64()).unwrap_or(0);
         let path = s(f.path);
-        let dir = std::path::Path::new(&path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+        let dir = match crate::index::members::split(&path) {
+            // An archived e-mail: the archive and the folder inside it.
+            Some((container, _)) => {
+                let info: serde_json::Value = serde_json::from_str(&s(f.info)).unwrap_or_default();
+                match info.get("folder").and_then(|v| v.as_str()).filter(|v| !v.is_empty()) {
+                    Some(folder) => format!("{container} › {folder}"),
+                    None => container.to_string(),
+                }
+            }
+            None => std::path::Path::new(&path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+        };
         let pages = u(f.pages);
         ResultItem {
             name: s(f.name),

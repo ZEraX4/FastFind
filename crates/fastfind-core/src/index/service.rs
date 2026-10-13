@@ -34,6 +34,7 @@ use tantivy::schema::Value;
 use tantivy::{TantivyDocument, Term};
 
 use super::catalog::{CatOp, Catalog, FileRecord, Status};
+use super::members;
 use super::schema::Fields;
 use super::store::IndexStore;
 use super::textstore::{self, TextOp, TextStore};
@@ -43,6 +44,7 @@ use crate::fs::{scan, FileEntry, PathFilter, ScanOptions};
 use crate::model::{flags, IndexProgress};
 use crate::parsers::registry::kind_for_ext;
 use crate::parsers::sniff::read_header;
+use crate::parsers::pst::{self, ArchivedMessage};
 use crate::parsers::{DocMeta, Kind, Limits, ParseContext, ParseError, ParserRegistry, TextMode, TextSink};
 use crate::util::{self, extension_of, filter_form, lower_thread_priority, path_hash, path_str, CancelToken};
 
@@ -91,6 +93,10 @@ enum WriterMsg {
     DeleteUnder { dir: String },
     DeleteRoot { root_id: i64, ack: Sender<()> },
     Touch { path: String, size: u64, mtime_ns: i64 },
+    /// One member of a container (see [`members`]): its document and stored text only.
+    Member { path: String, doc: Box<TantivyDocument>, text: Option<Vec<u8>> },
+    /// Remove every member of a container (sent before it is read again).
+    DeleteMembers { container: String },
     Commit { ack: Option<Sender<()>> },
     ClearAll { ack: Sender<()> },
     Shutdown,
@@ -869,6 +875,14 @@ fn process(inner: &Inner, item: &WorkItem) -> Outcome {
     let ext = extension_of(&item.path);
     let kind = kind_for_ext(&ext);
 
+    // Outlook archives: no size limit (they are read one e-mail at a time), and always read
+    // again when moved, since their e-mails' paths change with theirs.
+    if members::is_container(&path_str(&item.path)) {
+        if !filter.content_allowed(&ext) {
+            return Outcome::Doc(name_only(inner, item, Status::Skipped, Some("file type excluded in settings".into()), 0));
+        }
+        return index_archive(inner, item, &settings);
+    }
     if let Some(p) = try_reuse(inner, item, kind) {
         return Outcome::Doc(p);
     }
@@ -983,6 +997,107 @@ fn process(inner: &Inner, item: &WorkItem) -> Outcome {
     })
 }
 
+/// An Outlook archive: one document per e-mail (see [`members`]), sent as they are read, then
+/// the archive itself. Its catalog row comes last, so an interrupted run is simply repeated.
+fn index_archive(inner: &Inner, item: &WorkItem, settings: &Settings) -> Outcome {
+    let container = path_str(&item.path);
+    let f = &inner.store.fields;
+    let limits = Limits { max_text_bytes: (settings.indexing.max_indexed_text_mb as usize) << 20, ..Limits::default() };
+    let per_message = Some(Duration::from_secs(settings.indexing.parse_timeout_secs));
+    let cap = (settings.indexing.stored_text_kb as usize) << 10;
+    // The old e-mails stay searchable until the archive could actually be opened.
+    let mut cleared = false;
+    let clear = |cleared: &mut bool| {
+        if !std::mem::replace(cleared, true) {
+            send_to_writer(inner, WriterMsg::DeleteMembers { container: container.clone() });
+        }
+    };
+    let res = pst::read_archive(&item.path, &limits, per_message, &|| !inner.is_shutdown(), |m| {
+        clear(&mut cleared);
+        let path = members::member_path(&container, m.id);
+        let doc = member_doc(f, item, &path, &m);
+        let text = (!m.text.trim().is_empty()).then(|| {
+            let cut = util::floor_char_boundary(&m.text, cap);
+            let locs: Vec<_> = m.locs.iter().filter(|l| (l.offset as usize) <= cut).cloned().collect();
+            textstore::encode(&m.text[..cut], &locs)
+        });
+        send_to_writer(inner, WriterMsg::Member { path, doc: Box::new(doc), text });
+    });
+    let summary = match res {
+        Ok(s) => {
+            clear(&mut cleared);
+            s
+        }
+        Err(ParseError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => return Outcome::Delete(container),
+        // Outlook locks an archive it has open (Windows sharing / lock violation). Recorded with
+        // no date, so every later scan tries again until Outlook lets go of it.
+        Err(ParseError::Io(e)) if matches!(e.raw_os_error(), Some(32 | 33)) => {
+            let mut p = name_only(inner, item, Status::Failed, Some("in use by Outlook; read again once Outlook closes it".into()), flags::FAILED);
+            p.record.mtime_ns = 0;
+            return Outcome::Doc(p);
+        }
+        Err(ParseError::Timeout) if inner.is_shutdown() => {
+            let mut p = name_only(inner, item, Status::Failed, Some("interrupted".into()), flags::FAILED);
+            p.record.mtime_ns = 0;
+            return Outcome::Doc(p);
+        }
+        Err(ParseError::Unsupported(m)) => return Outcome::Doc(name_only(inner, item, Status::NameOnly, Some(m), 0)),
+        Err(e) => {
+            tracing::info!(path = %item.path.display(), error = %e, "archive unreadable");
+            return Outcome::Doc(name_only(inner, item, Status::Failed, Some(e.to_string()), flags::FAILED));
+        }
+    };
+    let emails = |n: u64| if n == 1 { "1 e-mail".to_string() } else { format!("{n} e-mails") };
+    let mut note = format!("Outlook archive with {}. Each e-mail is a separate search result.", emails(summary.messages));
+    let reason = (summary.skipped > 0).then(|| format!("{} could not be read", emails(summary.skipped)));
+    if let Some(r) = &reason {
+        note.push_str(&format!(" {r}."));
+    }
+    let doc = base_doc(f, item.root, &item.path, item.size, item.mtime_ns, Kind::Text, 0, None, TextMode::Stored);
+    Outcome::Doc(Processed {
+        record: record(item, Kind::Text, Status::Indexed, reason, 0, None),
+        doc: Some(doc),
+        text: TextAction::Put(textstore::encode(&note, &[])),
+        delete_old: item.reuse_from.clone(),
+    })
+}
+
+/// The search document of one archived e-mail: named by its subject, filed under the archive's
+/// directory (so folder filters include it), dated when it was sent.
+fn member_doc(f: &Fields, item: &WorkItem, path: &str, m: &ArchivedMessage) -> TantivyDocument {
+    let container = path_str(&item.path);
+    let name = if m.subject.trim().is_empty() { "(no subject)".to_string() } else { m.subject.trim().to_string() };
+    let mut fl = 0;
+    if m.truncated {
+        fl |= flags::TRUNCATED;
+    }
+    let mut d = TantivyDocument::default();
+    d.add_text(f.path, path);
+    d.add_u64(f.pid, path_hash(path));
+    d.add_text(f.name, &name);
+    d.add_text(f.name_lc, name.to_lowercase());
+    d.add_text(f.dir, format!("{}/", filter_form(&container)));
+    d.add_text(f.path_t, format!("{container} {}", m.folder));
+    d.add_text(f.ext, "eml");
+    d.add_text(f.kind, Kind::Text.as_str());
+    d.add_u64(f.root, item.root as u64);
+    d.add_u64(f.size, m.size);
+    d.add_i64(f.mtime, m.time.unwrap_or(item.mtime_ns.div_euclid(1_000_000_000)));
+    d.add_u64(f.flags, fl);
+    d.add_u64(f.pages, 0);
+    d.add_u64(f.mode, TextMode::Stored as u64);
+    d.add_text(f.content, &m.text);
+    let meta: Vec<&str> = [Some(name.as_str()), m.sender.as_deref(), Some(m.folder.as_str())].into_iter().flatten().filter(|s| !s.is_empty()).collect();
+    d.add_text(f.meta, meta.join("\n"));
+    d.add_text(f.info, serde_json::json!({ "title": name, "author": m.sender, "folder": m.folder }).to_string());
+    d
+}
+
+fn send_to_writer(inner: &Inner, m: WriterMsg) {
+    inner.progress.writer_sent.fetch_add(1, Ordering::AcqRel);
+    let _ = inner.writer_tx.send(m);
+}
+
 /// Renamed/moved file with an unchanged, fully stored text: rebuild its document from the
 /// text store instead of re-parsing (saves re-reading big PDFs after a folder move).
 fn try_reuse(inner: &Inner, item: &WorkItem, kind: Kind) -> Option<Processed> {
@@ -1035,6 +1150,9 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
     let mut docs_this_session = 0u64;
     let mut last_commit = Instant::now();
     let mut acks: Vec<Sender<()>> = Vec::new();
+    // Text-store keys of members added since the last commit, by container (committed ones
+    // are found through the index when the container's members are deleted).
+    let mut pending_members: HashMap<String, Vec<u64>> = HashMap::new();
 
     let commit = |cat_ops: &mut Vec<CatOp>, text_ops: &mut Vec<TextOp>| {
         let t0 = Instant::now();
@@ -1089,6 +1207,9 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
                                 w.delete_term(Term::from_field_text(f.path, old));
                                 cat_ops.push(CatOp::Delete { path: old.clone() });
                                 text_ops.push(TextOp::Delete { key: path_hash(old) });
+                                if members::is_container(old) {
+                                    let _ = w.delete_query(Box::new(members::range(&f, old)));
+                                }
                             }
                         }
                         w.delete_term(Term::from_field_text(f.path, &p.record.path));
@@ -1098,6 +1219,9 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
                             }
                         }
                     });
+                    if let Some(old) = p.delete_old.as_deref().filter(|o| *o != p.record.path && members::is_container(o)) {
+                        member_texts(&inner, old, &mut pending_members, &mut text_ops);
+                    }
                     let key = path_hash(&p.record.path);
                     match p.text {
                         TextAction::Put(blob) => {
@@ -1114,6 +1238,9 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
                 WriterMsg::Delete { path } => {
                     inner.store.with_writer(|w| w.delete_term(Term::from_field_text(f.path, &path)));
                     text_ops.push(TextOp::Delete { key: path_hash(&path) });
+                    if members::is_container(&path) {
+                        delete_members(&inner, &path, &mut pending_members, &mut text_ops);
+                    }
                     cat_ops.push(CatOp::Delete { path });
                     dirty = true;
                 }
@@ -1126,6 +1253,9 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
                             }
                         });
                         text_ops.extend(paths.iter().map(|p| TextOp::Delete { key: path_hash(p) }));
+                        for p in paths.iter().filter(|p| members::is_container(p)) {
+                            delete_members(&inner, p, &mut pending_members, &mut text_ops);
+                        }
                         cat_ops.push(CatOp::DeleteUnder { prefix: dir });
                         dirty = true;
                     }
@@ -1140,6 +1270,9 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
                         }
                     });
                     text_ops.extend(paths.iter().map(|p| TextOp::Delete { key: path_hash(p) }));
+                    for p in paths.iter().filter(|p| members::is_container(p)) {
+                        delete_members(&inner, p, &mut pending_members, &mut text_ops);
+                    }
                     cat_ops.push(CatOp::DeleteRoot { root_id });
                     dirty = true;
                     force = true;
@@ -1147,6 +1280,32 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
                 }
                 WriterMsg::Touch { path, size, mtime_ns } => {
                     cat_ops.push(CatOp::Touch { path, size, mtime_ns });
+                    dirty = true;
+                }
+                WriterMsg::Member { path, doc, text } => {
+                    inner.store.with_writer(|w| {
+                        w.delete_term(Term::from_field_text(f.path, &path));
+                        if let Err(e) = w.add_document(*doc) {
+                            tracing::error!(path = %path, error = %e, "add_document failed");
+                        }
+                    });
+                    let key = path_hash(&path);
+                    match text {
+                        Some(blob) => {
+                            text_bytes += blob.len();
+                            text_ops.push(TextOp::Put { key, blob });
+                            if let Some((container, _)) = members::split(&path) {
+                                pending_members.entry(container.to_string()).or_default().push(key);
+                            }
+                        }
+                        None => text_ops.push(TextOp::Delete { key }),
+                    }
+                    docs_since_commit += 1;
+                    docs_this_session += 1;
+                    dirty = true;
+                }
+                WriterMsg::DeleteMembers { container } => {
+                    delete_members(&inner, &container, &mut pending_members, &mut text_ops);
                     dirty = true;
                 }
                 WriterMsg::Commit { ack } => {
@@ -1163,6 +1322,7 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
                     }
                     let _ = inner.texts.clear();
                     let _ = inner.catalog.clear_files();
+                    pending_members.clear();
                     dirty = false;
                     docs_since_commit = 0;
                     let _ = ack.send(());
@@ -1193,6 +1353,7 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
         if (force && (dirty || !acks.is_empty())) || due {
             if dirty {
                 commit(&mut cat_ops, &mut text_ops);
+                pending_members.clear();
                 text_bytes = 0;
             }
             dirty = false;
@@ -1210,5 +1371,24 @@ fn writer_loop(inner: Arc<Inner>, rx: Receiver<WriterMsg>) {
         if shutdown {
             return;
         }
+    }
+}
+
+/// Remove every member of `container` from the index and the text store.
+fn delete_members(inner: &Inner, container: &str, pending: &mut HashMap<String, Vec<u64>>, text_ops: &mut Vec<TextOp>) {
+    let f = inner.store.fields;
+    inner.store.with_writer(|w| {
+        if let Err(e) = w.delete_query(Box::new(members::range(&f, container))) {
+            tracing::error!(container, error = %e, "deleting archive members failed");
+        }
+    });
+    member_texts(inner, container, pending, text_ops);
+}
+
+/// Delete the stored texts of `container`'s members (committed and pending).
+fn member_texts(inner: &Inner, container: &str, pending: &mut HashMap<String, Vec<u64>>, text_ops: &mut Vec<TextOp>) {
+    text_ops.extend(members::committed(&inner.store, container).iter().map(|p| TextOp::Delete { key: path_hash(p) }));
+    if let Some(keys) = pending.remove(container) {
+        text_ops.extend(keys.into_iter().map(|key| TextOp::Delete { key }));
     }
 }

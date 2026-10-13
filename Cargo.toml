@@ -2,7 +2,7 @@
 resolver = "2"
 members = ["crates/fastfind-core", "crates/fastfind-cli", "src-tauri"]
 # Fuzzing needs nightly Rust; see fuzz/README.md.
-exclude = ["fuzz"]
+exclude = ["fuzz", "vendor"]
 
 [workspace.package]
 version = "1.4.0"
@@ -29,3 +29,7 @@ panic = "unwind"   # parsers are isolated with catch_unwind; do not abort on a m
 
 [profile.dev.package."*"]
 opt-level = 2      # keep dependency code (tantivy, pdf, zip) fast in dev builds
+
+# Patched dependencies (see vendor/README.md).
+[patch.crates-io]
+outlook-pst = { path = "vendor/outlook-pst" }

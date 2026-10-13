@@ -4,7 +4,7 @@
 use fastfind_core::config::Settings;
 use fastfind_core::model::{Diagnostics, IndexStatus, Page, Preview, RootInfo, SearchRequest, SearchResponse, SkippedFile, SnippetResult};
 use fastfind_core::util::CancelToken;
-use fastfind_core::Error;
+use fastfind_core::{Engine, Error};
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -132,6 +132,18 @@ fn check_indexed(state: &AppState, path: &str) -> R<()> {
 #[tauri::command]
 pub async fn open_file(app: AppHandle, state: State<'_, AppState>, path: String) -> R<()> {
     check_indexed(&state, &path)?;
+    if let Some(container) = Engine::container_of(&path) {
+        // An e-mail inside an Outlook archive: hand the mail app a copy as an .eml file.
+        if !std::path::Path::new(container).is_file() {
+            return Err("The archive no longer exists. It will disappear from results after the next index update.".into());
+        }
+        let engine = state.engine.clone();
+        let p = path.clone();
+        let eml = blocking(move || engine.export_member(&p).map_err(err)).await?;
+        app.opener().open_path(eml.to_string_lossy().into_owned(), None::<&str>).map_err(err)?;
+        state.engine.record_open(&path);
+        return Ok(());
+    }
     if !std::path::Path::new(&path).exists() {
         return Err("The file no longer exists. It will disappear from results after the next index update.".into());
     }
@@ -143,7 +155,9 @@ pub async fn open_file(app: AppHandle, state: State<'_, AppState>, path: String)
 #[tauri::command]
 pub async fn reveal_file(app: AppHandle, state: State<'_, AppState>, path: String) -> R<()> {
     check_indexed(&state, &path)?;
-    app.opener().reveal_item_in_dir(&path).map_err(err)?;
+    // An archived e-mail: show the archive that holds it.
+    let target = Engine::container_of(&path).unwrap_or(&path);
+    app.opener().reveal_item_in_dir(target).map_err(err)?;
     state.engine.record_open(&path);
     Ok(())
 }

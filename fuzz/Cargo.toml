@@ -143,3 +143,7 @@ path = "fuzz_targets/zip.rs"
 test = false
 doc = false
 bench = false
+
+# Same patched dependencies as the main workspace (see vendor/README.md).
+[patch.crates-io]
+outlook-pst = { path = "../vendor/outlook-pst" }

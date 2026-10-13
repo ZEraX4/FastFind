@@ -431,9 +431,32 @@ impl Engine {
 
     /// Remember that the user opened something here (directory gets indexing priority).
     pub fn record_open(&self, path: &str) {
+        let path = crate::index::members::split(path).map_or(path, |(container, _)| container);
         if let Some(parent) = Path::new(path).parent() {
             let _ = self.catalog.record_dir_hit(&filter_form(&path_str(parent)));
         }
+    }
+
+    /// For a result inside a file (an e-mail in an Outlook archive): the file that holds it.
+    pub fn container_of(path: &str) -> Option<&str> {
+        crate::index::members::split(path).map(|(container, _)| container)
+    }
+
+    /// Write an archived e-mail as an `.eml` file (in the temp folder) that the default mail
+    /// app can open. Earlier exports are replaced.
+    pub fn export_member(&self, path: &str) -> Result<PathBuf> {
+        let (container, id) = crate::index::members::split(path).ok_or_else(|| Error::InvalidInput("not an archived e-mail".into()))?;
+        let eml = crate::parsers::pst::export_eml(Path::new(container), id).map_err(|e| match e {
+            crate::parsers::ParseError::Io(e) if matches!(e.raw_os_error(), Some(32 | 33)) => {
+                Error::Other("The archive is open in Outlook; open the e-mail there, or close Outlook and try again.".into())
+            }
+            e => Error::Other(format!("cannot read the e-mail: {e}")),
+        })?;
+        let dir = std::env::temp_dir().join("FastFind");
+        std::fs::create_dir_all(&dir)?;
+        let out = dir.join(format!("email-{id}.eml"));
+        std::fs::write(&out, eml)?;
+        Ok(out)
     }
 
     pub fn supported_extensions(&self) -> Vec<&'static str> {

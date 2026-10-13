@@ -141,3 +141,51 @@ fn outlook_ansi_msg_with_html_body() {
     assert!(o.text.contains("Jane Doe <jane@example.com>"), "{}", o.text);
     assert!(o.text.contains("The pelicanmargin figures are final."), "{}", o.text);
 }
+
+/// An archive made by Outlook (scripts/make-outlook-pst-fixture.ps1): one result per e-mail.
+#[test]
+fn outlook_archive_pst() {
+    use fastfind_core::parsers::pst::{export_eml, read_archive, ArchivedMessage};
+    use mail_parser::MimeHeaders;
+    let p = fixture("outlook-archive.pst");
+    let mut all: Vec<ArchivedMessage> = Vec::new();
+    let summary = read_archive(&p, &Limits::default(), None, &|| true, |m| all.push(m)).unwrap();
+    assert_eq!(summary.skipped, 0);
+    let find = |subject: &str| all.iter().find(|m| m.subject == subject).unwrap_or_else(|| panic!("{subject:?} not among {:?}", all.iter().map(|m| &m.subject).collect::<Vec<_>>()));
+    let at = |m: &ArchivedMessage, needle: &str| {
+        let off = m.text.find(needle).unwrap_or_else(|| panic!("{needle:?} not in {:?}", m.text));
+        describe(&m.locs, &m.text, off, false)
+    };
+
+    // Turkish and Arabic text, a Word attachment.
+    let m = find("Geçiş izni — تقرير الميزانية");
+    assert_eq!(m.folder, "Archive 2025");
+    for w in ["Ayşe Yılmaz <ayse@example.com>", "albatrossledger", "الميزانية معتمدة للمدرسة"] {
+        assert!(m.text.contains(w), "{w}: {}", m.text);
+    }
+    assert_eq!(at(m, "marmalade factory").as_deref(), Some("≈ Page 1 · Attachment: modern.docx"));
+    assert!(m.time.is_some());
+
+    // HTML body, a text attachment, in a subfolder.
+    let m = find("Budget review");
+    assert_eq!(m.folder, "Archive 2025 › Projects");
+    assert!(m.text.contains("The condorbudget figures are final."), "{}", m.text);
+    assert_eq!(at(m, "ibisinventory").as_deref(), Some("Attachment: notes.txt"));
+    let eml = export_eml(&p, m.id).unwrap();
+    let parsed = mail_parser::MessageParser::default().parse(&eml).unwrap();
+    assert_eq!(parsed.subject(), Some("Budget review"));
+    assert!(parsed.body_html(0).unwrap().contains("condorbudget"));
+    assert_eq!(parsed.attachments().filter_map(|a| a.attachment_name()).collect::<Vec<_>>(), ["notes.txt"]);
+
+    // An attached Outlook item.
+    let m = find("Forwarded request");
+    assert!(m.text.contains("pelicanmemo"), "{}", m.text);
+    assert_eq!(at(m, "ospreyfigure").as_deref(), Some("Attached message: Original request"));
+
+    // Unicode subjects survive the export (RFC 2047).
+    let m = find("Geçiş izni — تقرير الميزانية");
+    let eml = export_eml(&p, m.id).unwrap();
+    let parsed = mail_parser::MessageParser::default().parse(&eml).unwrap();
+    assert_eq!(parsed.subject(), Some("Geçiş izni — تقرير الميزانية"));
+    assert_eq!(parsed.attachments().count(), 1);
+}
