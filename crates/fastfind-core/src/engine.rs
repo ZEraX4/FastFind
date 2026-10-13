@@ -98,6 +98,13 @@ impl Engine {
             Ok(n) => tracing::info!(files = n, "re-checking indexed PDFs for scanned pages"),
             Err(e) => tracing::warn!(error = %e, "could not mark PDFs for a scanned-page check"),
         }
+        // Since 1.5.0 the e-mails in Outlook archives are indexed; archives catalogued before
+        // (by name only) are read once by the startup scan.
+        match catalog.recheck_outlook_archives() {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(files = n, "reading Outlook archives indexed by name only"),
+            Err(e) => tracing::warn!(error = %e, "could not mark Outlook archives to be read"),
+        }
         if settings.indexing.ocr.enabled {
             // Up to 1.1.0 Tesseract was given file paths, which it cannot open on Windows when
             // they contain characters outside the legacy code page. Those files failed with
