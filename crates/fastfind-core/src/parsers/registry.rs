@@ -11,6 +11,7 @@ use super::email::EmailParser;
 use super::msg::MsgParser;
 use super::epub::EpubParser;
 use super::html::HtmlParser;
+use super::inet::InetReportParser;
 use super::json::JsonParser;
 use super::odf::OdfParser;
 use super::ooxml::{DocxParser, PptxParser, XlsxParser};
@@ -80,6 +81,7 @@ impl ParserRegistry {
             plain.clone(), html.clone(), xml.clone(), rtf.clone(), pdf.clone(), doc.clone(), xls.clone(),
             ppt.clone(), Arc::new(JsonParser), Arc::new(DocxParser), Arc::new(XlsxParser),
             Arc::new(PptxParser), Arc::new(OdfParser), Arc::new(EpubParser), Arc::new(EmailParser), Arc::new(MsgParser), Arc::new(ZipParser),
+            Arc::new(InetReportParser),
         ];
         let mut by_ext = HashMap::new();
         for p in &all {
@@ -186,6 +188,23 @@ mod tests {
         assert_eq!(r.resolve(&p, "weird", b"just text", true).unwrap().parser.name(), "plain-text");
         assert!(r.resolve(&p, "weird", b"just text", false).is_none());
         assert_eq!(r.resolve(&p, "txt", b"plain", false).unwrap().parser.name(), "plain-text");
+    }
+
+    #[test]
+    fn rpt_is_read_only_when_it_is_an_inet_report() {
+        let r = ParserRegistry::new();
+        let dir = tempfile::tempdir().unwrap();
+        // i-net Clear Reports: a zip.
+        let p = dir.path().join("inet.rpt");
+        assert_eq!(r.resolve(&p, "rpt", b"PK\x03\x04rest", true).unwrap().parser.name(), "inet-report");
+        // Classic Crystal Reports: an OLE compound file with no Office streams → name only.
+        let p = dir.path().join("crystal.rpt");
+        let mut c = cfb::create(&p).unwrap();
+        std::io::Write::write_all(&mut c.create_stream("/Contents").unwrap(), b"report").unwrap();
+        c.flush().unwrap();
+        drop(c);
+        let header = std::fs::read(&p).unwrap();
+        assert!(r.resolve(&p, "rpt", &header[..512], true).is_none());
     }
 
     #[test]

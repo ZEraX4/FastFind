@@ -656,3 +656,35 @@ fn outlook_archives_give_one_result_per_email() {
     assert!(search(&e, "ospreyfigure").is_empty());
     e.shutdown();
 }
+
+#[test]
+fn inet_reports_are_searchable_by_labels_and_sql() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("reports");
+    fs::create_dir_all(&root).unwrap();
+    let content = r#"<?xml version="1.0" encoding="UTF-8"?><inet:Report xmlns:inet="http://www.inetsoftware.de">
+<Datasource><Tablesource alias="Query"><Sql><TextData><![CDATA[SELECT CODE FROM MARMOSETORDERS]]></TextData></Sql></Tablesource></Datasource>
+<AreaPair type="DetailArea"><Area type="Detail"><Section type="Detail">
+<Element type="Text" x_position="100" y_position="100"><Element type="Paragraph"><Element type="TextPart"><TextData><![CDATA[Wombat delivery note]]></TextData></Element></Element></Element>
+</Section></Area></AreaPair></inet:Report>"#;
+    let mut w = zip::ZipWriter::new(fs::File::create(root.join("delivery.rpt")).unwrap());
+    let opts = zip::write::SimpleFileOptions::default();
+    for (name, data) in [("mimetype", "application/crystalclear.report"), ("content.xml", content), ("meta.xml", "<Meta><Title>Delivery note</Title></Meta>")] {
+        w.start_file(name, opts).unwrap();
+        w.write_all(data.as_bytes()).unwrap();
+    }
+    w.finish().unwrap();
+
+    let e = open(&tmp.path().join("data"), false);
+    e.add_root(root.to_str().unwrap()).unwrap();
+    assert!(e.wait_idle(Duration::from_secs(120)));
+    for word in ["wombat", "marmosetorders"] {
+        assert_eq!(search(&e, word), ["delivery.rpt"], "{word}");
+    }
+    let path = e.search(&SearchRequest::new("wombat"), &CancelToken::new()).unwrap().items.remove(0).path;
+    let loc = |q: &str| e.snippets(&SearchRequest::new(q), std::slice::from_ref(&path)).unwrap().remove(0).snippets[0].location.clone();
+    assert_eq!(loc("wombat").as_deref(), Some("Details"));
+    assert_eq!(loc("marmosetorders").as_deref(), Some("SQL query: Query"));
+    assert_eq!(e.preview(&SearchRequest::new("wombat"), &path).unwrap().title.as_deref(), Some("Delivery note"));
+    e.shutdown();
+}

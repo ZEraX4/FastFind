@@ -10,7 +10,7 @@ ties up an indexing worker.
 | Target | Reader |
 |---|---|
 | `doc`, `xls`, `ppt` | legacy Office (`parsers/doc.rs`, `xls.rs`, `ppt.rs`) |
-| `docx`, `xlsx`, `pptx`, `odf`, `epub` | zip-based documents |
+| `docx`, `xlsx`, `pptx`, `odf`, `inet`, `epub` | zip-based documents (`inet`: i-net Clear Reports `.rpt`) |
 | `rtf`, `html`, `xml`, `json`, `plain` | text formats and encoding detection |
 | `eml`, `msg`, `zip` | containers, including their attachments and entries |
 | `query` | the search box: query parser, tokenizer, regex and phrase matching |

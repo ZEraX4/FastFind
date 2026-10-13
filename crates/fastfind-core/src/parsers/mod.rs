@@ -12,6 +12,7 @@ pub mod email;
 pub mod embedded;
 pub mod epub;
 pub mod html;
+pub mod inet;
 pub mod json;
 pub mod locmap;
 pub mod msg;

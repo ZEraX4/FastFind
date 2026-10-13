@@ -81,7 +81,8 @@ answered in milliseconds.
 │ index       catalog (SQLite) · store (Tantivy) · textstore (zstd/SQLite)        │
 │             service: coordinator → scanner → differ → lanes → workers → writer  │
 │ parsers     plain · html · xml · json · rtf · pdf (+ helper pool) · doc · docx  │
-│             xls · xlsx · ppt · pptx · odt/ods/odp · epub · sniffing · zipsafe   │
+│             xls · xlsx · ppt · pptx · odt/ods/odp · epub · eml · msg · pst      │
+│             i-net reports · zip · sniffing · zipsafe                            │
 │ fs          scanner · filter · watcher (debounced) · storage probe             │
 │ ocr         Tesseract integration (background, idle-only)                      │
 └────────────────────────────────────────────────────────────────────────────────┘
@@ -177,7 +178,7 @@ any rule requires bumping `SCHEMA_VERSION`; see §4 for how existing indexes are
 |---|---|---|
 | Raw | text, code, CSV, logs… | original file, streamed |
 | Reparse | HTML, XML, JSON | re-extracted on demand |
-| Stored | PDF, Office, ODF, EPUB, RTF, e-mail, e-mails in Outlook archives | zstd blob in `text.db` (≤ 1 MB/doc) |
+| Stored | PDF, Office, ODF, EPUB, RTF, e-mail, e-mails in Outlook archives, i-net reports | zstd blob in `text.db` (≤ 1 MB/doc) |
 
 Location anchors recorded during extraction map a byte offset to `Page 3`, `≈ Page 2`
 (DOCX), `Slide 4 — Title`, `Sheet!B7` (exact cell, including sparse rows and columns),

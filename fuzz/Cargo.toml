@@ -75,6 +75,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "inet"
+path = "fuzz_targets/inet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "odf"
 path = "fuzz_targets/odf.rs"
 test = false
