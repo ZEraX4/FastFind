@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.6.0 — 2026-10-13
 
 * **i-net Clear Reports.** Report designs (`.rpt` files from i-net Clear Reports, formerly
   i-net Crystal-Clear) are now searchable: the report title, every label and database field in
