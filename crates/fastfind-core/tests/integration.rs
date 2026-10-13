@@ -607,6 +607,10 @@ fn outlook_archives_give_one_result_per_email() {
     let e = open(&tmp.path().join("data"), false);
     e.add_root(root.to_str().unwrap()).unwrap();
     assert!(e.wait_idle(Duration::from_secs(120)));
+    // Paths as FastFind stores them (temp folders are often reached through a link or a short
+    // name: /var → /private/var on macOS, RUNNER~1 on Windows).
+    let root = PathBuf::from(&e.roots().unwrap()[0].path);
+    let pst = root.join("2025.pst");
 
     // Each e-mail is its own result, named by its subject and placed in the archive's folder.
     assert_eq!(search(&e, "condorbudget"), ["Budget review"]);
