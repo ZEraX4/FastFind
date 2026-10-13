@@ -8,7 +8,8 @@
   attached to an e-mail. Opening a result opens that e-mail in your mail app; *Show in folder*
   shows the archive. Archives have no size limit. While Outlook has an archive open it keeps
   the file locked: FastFind tries again later, and earlier results stay searchable. Offline
-  mailbox caches (`.ost`) are found by name only.
+  mailbox caches (`.ost`) are found by name only. Archives already in your indexed folders are
+  read once after updating.
 
 ## 1.4.0 — 2026-10-12
 

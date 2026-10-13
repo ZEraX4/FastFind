@@ -502,6 +502,22 @@ impl Catalog {
         Ok(n)
     }
 
+    /// Once per catalog: make the next scan read Outlook archives (`.pst`) again. Before 1.5.0
+    /// they were catalogued by name only, and unchanged files are not read again otherwise.
+    /// Returns rows marked.
+    pub fn recheck_outlook_archives(&self) -> Result<usize> {
+        let mut c = self.write.lock();
+        let tx = c.transaction()?;
+        if tx.query_row("SELECT 1 FROM meta WHERE key='outlook_archives_checked'", [], |_| Ok(())).optional()?.is_some() {
+            return Ok(0);
+        }
+        // LIKE ignores ASCII case, so ".PST" matches too.
+        let n = tx.execute("UPDATE files SET mtime=-1, hash=NULL WHERE path LIKE '%.pst'", [])?;
+        tx.execute("INSERT INTO meta(key, value) VALUES('outlook_archives_checked', '1')", [])?;
+        tx.commit()?;
+        Ok(n)
+    }
+
     /// Make the next scan read these files again, whatever their size and date.
     pub fn mark_changed(&self, paths: &[String]) -> Result<()> {
         let mut c = self.write.lock();
@@ -623,6 +639,21 @@ mod tests {
         assert_eq!(snap[&path_hash("/r/notes.txt")].mtime_ns, 5);
         c.apply(&[CatOp::Upsert(pdf("/r/typed.pdf", 0))]).unwrap();
         assert_eq!(c.recheck_pdfs_for_scanned_pages().unwrap(), 0, "only once");
+    }
+
+    #[test]
+    fn outlook_archives_are_read_again_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (c, _) = Catalog::open(&dir.path().join("c.db"), &dir.path().join("q")).unwrap();
+        c.add_root("/r").unwrap();
+        c.apply(&[CatOp::Upsert(rec("/r/2025.pst", 1)), CatOp::Upsert(rec("/r/OLD.PST", 1)), CatOp::Upsert(rec("/r/notes.txt", 1))]).unwrap();
+        assert_eq!(c.recheck_outlook_archives().unwrap(), 2);
+        let snap = c.snapshot(1, None).unwrap();
+        assert_eq!(snap[&path_hash("/r/2025.pst")].mtime_ns, -1, "looks changed to the next scan");
+        assert_eq!(snap[&path_hash("/r/OLD.PST")].mtime_ns, -1);
+        assert_eq!(snap[&path_hash("/r/notes.txt")].mtime_ns, 5);
+        c.apply(&[CatOp::Upsert(rec("/r/2025.pst", 1))]).unwrap();
+        assert_eq!(c.recheck_outlook_archives().unwrap(), 0, "only once");
     }
 
     #[test]
