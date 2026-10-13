@@ -13,7 +13,12 @@ request it ever makes is an optional, opt-in update check.
   **DOC, DOCX, XLS, XLSX, PPT, PPTX**, ODT/ODS/ODP, EPUB, **PDF** (via PDFium) and e-mail
   (**EML** and Outlook **MSG**, including attachments), Outlook archives (**PST**, one result
   per e-mail; opening one hands it to your mail app), and **ZIP** archives (the names and
-  contents of the files inside, nested archives included). Scanned PDFs, and scanned pages inside
+  contents of the files inside, nested archives included).
+  > **Outlook:** FastFind searches `.pst` files saved on disk (archives, exports, old
+  > mailboxes), not the mailbox you use in Outlook today. Exchange and Microsoft 365 mail is
+  > kept in an offline cache (`.ost`) that FastFind can't read, the new Outlook and Outlook on
+  > the web keep no mail file at all, and Outlook locks any `.pst` it has open until it lets go
+  > of it. To search older mail, archive or export it to a `.pst` in Outlook. Scanned PDFs, and scanned pages inside
   typed PDFs, are detected and can be OCR'd with a local Tesseract.
 * **Languages:** accents are ignored (`Café` = `cafe`, `Geçiş` = `gecis`), and Arabic is
   normalized: `أ إ آ` = `ا`, `ة` = `ه`, `ى` = `ي`, tatweel and harakat are ignored, Arabic-Indic
