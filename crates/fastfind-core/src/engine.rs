@@ -105,6 +105,12 @@ impl Engine {
             Ok(n) => tracing::info!(files = n, "reading Outlook archives indexed by name only"),
             Err(e) => tracing::warn!(error = %e, "could not mark Outlook archives to be read"),
         }
+        // Since 1.6.0 i-net Clear Reports (.rpt) are read; once, like Outlook archives.
+        match catalog.recheck_extension_once("inet_reports_checked", "rpt") {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(files = n, "reading report files indexed by name only"),
+            Err(e) => tracing::warn!(error = %e, "could not mark report files to be read"),
+        }
         if settings.indexing.ocr.enabled {
             // Up to 1.1.0 Tesseract was given file paths, which it cannot open on Windows when
             // they contain characters outside the legacy code page. Those files failed with

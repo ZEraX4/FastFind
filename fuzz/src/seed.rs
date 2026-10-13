@@ -55,6 +55,13 @@ fn main() {
         ("OEBPS/ch1.xhtml", b"<html><body><h1>Chapter</h1><p>Text</p></body></html>"),
     ]));
 
+    // i-net Clear Reports: text, a field, a query and a formula.
+    put("inet", "min.rpt", &zip(&[
+        ("mimetype", b"application/crystalclear.report".as_slice()),
+        ("content.xml", br#"<?xml version="1.0"?><inet:Report xmlns:inet="http://www.inetsoftware.de"><Datasource><Tablesource alias="Q"><Column name="A" type="11"/><Sql><TextData><![CDATA[SELECT A FROM T]]></TextData></Sql></Tablesource></Datasource><FormulaFields><Field type="FormulaField"><Name value="f"/><TextData><![CDATA[{Q.A} * 2]]></TextData></Field></FormulaFields><AreaPair type="DetailArea"><Area type="Detail"><Section type="Detail"><Element type="Text" x_position="10" y_position="20"><Element type="Paragraph"><Element type="TextPart"><TextData><![CDATA[Label:]]></TextData></Element></Element></Element><Element type="FieldElement" x_position="900" y_position="20"><Reference name="field" type="DatabaseField" value="Q.A"/></Element></Section></Area></AreaPair></inet:Report>"#),
+        ("meta.xml", br#"<?xml version="1.0"?><Meta xmlns="http://www.inetsoftware.de:meta:1.0"><Title>T</Title></Meta>"#),
+    ]));
+
     // Archives: documents and a nested archive inside.
     let inner = zip(&[("deep/notes.txt", b"inner text".as_slice())]);
     put("zip", "mixed.zip", &zip(&[

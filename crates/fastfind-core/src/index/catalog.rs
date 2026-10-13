@@ -506,14 +506,20 @@ impl Catalog {
     /// they were catalogued by name only, and unchanged files are not read again otherwise.
     /// Returns rows marked.
     pub fn recheck_outlook_archives(&self) -> Result<usize> {
+        self.recheck_extension_once("outlook_archives_checked", "pst")
+    }
+
+    /// Once per catalog (`key` in `meta` records it): make the next scan read every file with
+    /// extension `ext` again, for formats newly read. Returns rows marked.
+    pub fn recheck_extension_once(&self, key: &str, ext: &str) -> Result<usize> {
         let mut c = self.write.lock();
         let tx = c.transaction()?;
-        if tx.query_row("SELECT 1 FROM meta WHERE key='outlook_archives_checked'", [], |_| Ok(())).optional()?.is_some() {
+        if tx.query_row("SELECT 1 FROM meta WHERE key=?1", [key], |_| Ok(())).optional()?.is_some() {
             return Ok(0);
         }
         // LIKE ignores ASCII case, so ".PST" matches too.
-        let n = tx.execute("UPDATE files SET mtime=-1, hash=NULL WHERE path LIKE '%.pst'", [])?;
-        tx.execute("INSERT INTO meta(key, value) VALUES('outlook_archives_checked', '1')", [])?;
+        let n = tx.execute("UPDATE files SET mtime=-1, hash=NULL WHERE path LIKE ?1", [format!("%.{ext}")])?;
+        tx.execute("INSERT INTO meta(key, value) VALUES(?1, '1')", [key])?;
         tx.commit()?;
         Ok(n)
     }

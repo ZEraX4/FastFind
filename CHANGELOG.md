@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+* **i-net Clear Reports.** Report designs (`.rpt` files from i-net Clear Reports, formerly
+  i-net Crystal-Clear) are now searchable: the report title, every label and database field in
+  reading order (a label stays next to its field), the SQL queries, formulas and parameter
+  prompts. Find which reports use a table or column, or show a label. Snippets tell you where
+  the match is: *Details*, *Page header*, *SQL query*, *Formula: name*. Report files already
+  in your indexed folders are read once after updating. Classic Crystal Reports `.rpt` files
+  use a different, closed format and are still found by name only.
+
 ## 1.5.0 — 2026-10-13
 
 * **Outlook archives.** E-mails in Outlook data files (`.pst`) are now searchable, each as its
