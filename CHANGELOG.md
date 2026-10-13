@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.0 — 2026-10-13
 
 * **Outlook archives.** E-mails in Outlook data files (`.pst`) are now searchable, each as its
   own result, named by its subject and shown with the archive and folder it is in. Attachments
