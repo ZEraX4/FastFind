@@ -5,7 +5,7 @@ members = ["crates/fastfind-core", "crates/fastfind-cli", "src-tauri"]
 exclude = ["fuzz", "vendor"]
 
 [workspace.package]
-version = "1.6.0"
+version = "1.6.1"
 edition = "2021"
 license = "MIT"
 authors = ["FastFind contributors"]

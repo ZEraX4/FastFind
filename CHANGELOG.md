@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.6.1 — 2026-10-15
 
 * **Fixed:** on Windows 8.1 and Windows Server 2012, FastFind's windows (the main window, quick
   search and the update progress window) had a thick coloured border on three sides. They now
