@@ -28,7 +28,7 @@ tracing.workspace = true
 parking_lot.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Wdk_System_SystemServices", "Win32_System_SystemInformation"] }
 
 [features]
 # Enables `tauri dev` custom protocol handling in release builds.

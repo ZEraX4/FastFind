@@ -194,6 +194,32 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Whether FastFind's undecorated windows can have the native shadow. Windows draws it by
+/// keeping the resizable frame around three sides of the window: invisible from Windows 10 on,
+/// but a coloured border on Windows 8.1 and Server 2012 (R2). There the windows go without it.
+pub fn native_shadow() -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Wdk::System::SystemServices::RtlGetVersion;
+        use windows_sys::Win32::System::SystemInformation::OSVERSIONINFOW;
+        static MODERN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        // RtlGetVersion reports the real version (GetVersionEx answers what the manifest asks).
+        *MODERN.get_or_init(|| unsafe {
+            let mut info: OSVERSIONINFOW = std::mem::zeroed();
+            info.dwOSVersionInfoSize = std::mem::size_of::<OSVERSIONINFOW>() as u32;
+            RtlGetVersion(&mut info) != 0 || info.dwMajorVersion >= 10
+        })
+    }
+    #[cfg(not(windows))]
+    true
+}
+
+/// Page script for windows without the native shadow: the page draws a thin edge itself
+/// (`[data-frame="plain"]` in the stylesheets) so the window still stands out from what's behind.
+pub fn frame_script() -> &'static str {
+    if native_shadow() { "" } else { "document.documentElement.dataset.frame = 'plain';" }
+}
+
 /// The pop-up search window: created hidden once, then shown and hidden by the shortcut.
 fn build_quick(app: &AppHandle) -> tauri::Result<()> {
     let w = WebviewWindowBuilder::new(app, QUICK, WebviewUrl::App("quick.html".into()))
@@ -201,6 +227,8 @@ fn build_quick(app: &AppHandle) -> tauri::Result<()> {
         .inner_size(QUICK_WIDTH, QUICK_HEIGHT)
         .resizable(false)
         .decorations(false)
+        .shadow(native_shadow())
+        .initialization_script(frame_script())
         .always_on_top(true)
         .skip_taskbar(true)
         .visible(false)

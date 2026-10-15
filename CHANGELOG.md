@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+* **Fixed:** on Windows 8.1 and Windows Server 2012, FastFind's windows (the main window, quick
+  search and the update progress window) had a thick coloured border on three sides. They now
+  have a thin edge instead, like on Windows 10 and 11.
+
 ## 1.6.0 — 2026-10-13
 
 * **i-net Clear Reports.** Report designs (`.rpt` files from i-net Clear Reports, formerly

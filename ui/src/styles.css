@@ -681,3 +681,14 @@ table.problems th, table.problems td { padding: 0.4rem 0.6rem; border-bottom: 1p
 .shortcut-rec kbd { font: inherit; font-weight: 600; letter-spacing: 0.02em; }
 .shortcut-rec.recording { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); }
 .shortcut-prompt p { margin: 0 0 1rem; line-height: 1.45; }
+
+/* ---------- window edge where Windows has no shadow (8.1, Server 2012) ---------- */
+
+:root[data-frame="plain"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  border: 1px solid var(--border-strong);
+  pointer-events: none;
+  z-index: 2147483647;
+}
