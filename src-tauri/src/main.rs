@@ -56,6 +56,8 @@ fn main() {
                     .inner_size(440.0, 170.0)
                     .resizable(false)
                     .decorations(false)
+                    .shadow(desktop::native_shadow())
+                    .initialization_script(desktop::frame_script())
                     .closable(false)
                     .center()
                     .build()
@@ -169,7 +171,12 @@ fn open_engine(handle: AppHandle, paths: AppPaths, splash: Option<WebviewWindow>
         }
         None => {
             let config = handle.config().app.windows.iter().find(|w| w.label == "main").cloned();
-            match config.map(|cfg| WebviewWindowBuilder::from_config(&handle, &cfg).and_then(|b| b.visible(!hidden).build())) {
+            let build = |cfg: &tauri::utils::config::WindowConfig| {
+                // Windows before 10 draw the shadow's frame as a coloured border: go without.
+                let cfg = tauri::utils::config::WindowConfig { shadow: cfg.shadow && desktop::native_shadow(), ..cfg.clone() };
+                WebviewWindowBuilder::from_config(&handle, &cfg)?.initialization_script(desktop::frame_script()).visible(!hidden).build()
+            };
+            match config.as_ref().map(build) {
                 Some(Ok(w)) => Some(w),
                 Some(Err(e)) => {
                     tracing::error!(error = %e, "cannot create the main window");
