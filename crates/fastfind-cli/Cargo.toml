@@ -15,5 +15,5 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap = { version = "4.6", features = ["derive", "env"] }
-sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 tempfile = "3"
